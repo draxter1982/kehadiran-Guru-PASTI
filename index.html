@@ -300,7 +300,7 @@
             console.log("Menggunakan Preview Config");
         } else {
             firebaseConfig = manualConfig;
-            console.log("Menggunakan Manual Config (Sila pastikan anda telah mengisi 'manualConfig' di dalam kod)");
+            console.log("Menggunakan Manual Config");
         }
         
         // Logik App ID (Gunakan ID unik jika di Canvas, atau 'pasti-live' jika di Vercel)
@@ -352,7 +352,8 @@
                 }
             } catch (err) {
                 console.error("Auth error:", err);
-                showToast("Ralat sambungan. Semak konsol.", 'error');
+                const msg = err.message || "Ralat tidak diketahui";
+                showToast(`Ralat Init: ${msg}`, 'error');
             }
         }
 
@@ -420,11 +421,14 @@
                     console.error("Login failed", error);
                     let msg = "Ralat sambungan.";
                     if (error.code === 'auth/operation-not-allowed') {
-                        msg = "Sila aktifkan 'Anonymous Auth' di Firebase Console.";
-                    } else if (error.code === 'auth/api-key-not-valid') {
-                        msg = "API Key tidak sah. Semak config.";
+                        msg = "Sila aktifkan 'Anonymous Auth' di Firebase Console (Build > Authentication).";
+                    } else if (error.code === 'auth/api-key-not-valid' || error.message.includes('API key')) {
+                        msg = "API Key tidak sah. Sila semak manualConfig dalam kod.";
+                    } else if (error.code === 'auth/admin-restricted-operation') {
+                        msg = "Admin restricted: Sila semak tetapan API Key atau Authentication.";
                     } else {
-                        msg = "Gagal menyambung. Sila muat semula halaman.";
+                        // Paparkan mesej ralat sebenar untuk debugging
+                        msg = "Gagal: " + error.message;
                     }
                     showToast(msg, 'error');
                     return;
@@ -832,5 +836,3 @@
         }
 
     </script>
-</body>
-</html>
