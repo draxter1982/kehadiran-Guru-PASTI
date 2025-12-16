@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Kehadiran Guru Pasti</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
+    <!-- QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; }
+        .page-section { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .page-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Scanner custom styles */
+        #reader { border-radius: 12px; overflow: hidden; }
+        #reader button { background-color: #10b981; color: white; padding: 8px 16px; border-radius: 6px; border: none; margin-top: 10px; }
+        
+        /* Loader Overlay */
+        #loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 100; display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.5s ease;
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- Initial Loading Screen -->
+    <div id="loader-overlay">
+        <div class="text-center">
+            <div class="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-green-800 font-semibold">Memuatkan Sistem...</p>
+        </div>
+    </div>
+
+    <!-- App Container -->
+    <div id="app" class="flex-1 flex flex-col h-full max-w-md mx-auto bg-white shadow-xl relative overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-green-600 text-white p-4 shadow-md flex justify-between items-center z-20">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-mosque text-xl"></i>
+                <h1 class="font-bold text-lg leading-tight">Kehadiran <br><span class="text-green-200 text-sm font-normal">Guru Sukarelawan</span></h1>
+            </div>
+            <button id="btnLogout" class="hidden text-sm bg-green-700 px-3 py-1 rounded hover:bg-green-800 transition">
+                Keluar <i class="fa-solid fa-right-from-bracket ml-1"></i>
+            </button>
+        </header>
+
+        <!-- Main Content Area (Scrollable) -->
+        <main class="flex-1 overflow-y-auto p-4 relative">
+            
+            <!-- 1. Login/Register Page -->
+            <div id="page-login" class="page-section h-full flex flex-col justify-center">
+                <div class="text-center mb-8">
+                    <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600 text-3xl">
+                        <i class="fa-solid fa-user-plus"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800">Pendaftaran Guru</h2>
+                    <p class="text-gray-500 text-sm px-6">Masukkan nama anda sekali sahaja. Sistem akan mengingati anda untuk log masuk seterusnya.</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Penuh (Seperti dalam kad pengenalan)</label>
+                        <input type="text" id="loginName" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none" placeholder="Cth: Cikgu Aminah">
+                    </div>
+                    
+                    <button id="btnTeacherLogin" class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold shadow-lg hover:bg-green-700 transition transform active:scale-95">
+                        Daftar Masuk
+                    </button>
+
+                    <div class="relative flex py-2 items-center">
+                        <div class="flex-grow border-t border-gray-300"></div>
+                        <span class="flex-shrink-0 mx-4 text-gray-400 text-xs">ATAU</span>
+                        <div class="flex-grow border-t border-gray-300"></div>
+                    </div>
+
+                    <button id="btnToggleAdmin" class="w-full bg-gray-800 text-white py-3 rounded-lg font-semibold shadow hover:bg-gray-900 transition">
+                        Log Masuk Pentadbir
+                    </button>
+
+                    <!-- Hidden Admin PIN Field -->
+                    <div id="adminPinArea" class="hidden mt-2 p-4 bg-gray-100 rounded-lg border border-gray-200">
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Kod Akses Pentadbir</label>
+                        <div class="flex gap-2">
+                            <input type="password" id="adminPin" class="flex-1 p-2 border rounded" placeholder="Kod (1234)">
+                            <button id="btnAdminLogin" class="bg-blue-600 text-white px-4 py-2 rounded font-bold">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Teacher Dashboard -->
+            <div id="page-teacher" class="page-section">
+                <div class="flex justify-between items-end mb-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Assalamualaikum,</p>
+                        <h2 id="teacherNameDisplay" class="text-xl font-bold text-gray-800">Cikgu</h2>
+                    </div>
+                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">Online</span>
+                </div>
+
+                <div class="bg-green-50 p-4 rounded-xl border border-green-100 mb-6 flex items-center justify-between shadow-sm">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase tracking-wide">Status Hari Ini</p>
+                        <h2 id="teacherStatus" class="text-xl font-bold text-gray-800">Belum Rekod</h2>
+                        <p id="teacherTime" class="text-sm text-green-600 font-medium">-</p>
+                    </div>
+                    <div id="statusIcon" class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl">
+                        <i class="fa-solid fa-clock"></i>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 mb-6">
+                    <button id="btnStartScanner" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-6 rounded-xl shadow-lg hover:shadow-xl transition transform active:scale-95 flex flex-col items-center justify-center gap-2">
+                        <div class="bg-white/20 p-3 rounded-full">
+                            <i class="fa-solid fa-qrcode text-3xl"></i>
+                        </div>
+                        <span class="font-bold text-lg">Imbas Kod QR</span>
+                        <span class="text-xs opacity-90">Untuk Masuk & Pulang</span>
+                    </button>
+                </div>
+
+                <div class="mt-6">
+                    <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-history text-green-600"></i> Rekod Terkini Anda
+                    </h3>
+                    <div id="myHistoryList" class="space-y-3">
+                        <div class="text-center py-8 text-gray-400 text-sm">Sedang memuatkan data...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Scanner Page -->
+            <div id="page-scanner" class="page-section h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-bold text-lg">Pengimbas QR</h2>
+                    <button id="btnStopScanner" class="text-red-500 font-medium text-sm">Batal</button>
+                </div>
+                
+                <div class="bg-black rounded-xl overflow-hidden shadow-lg flex-1 relative flex flex-col justify-center">
+                    <div id="reader" class="w-full h-full object-cover"></div>
+                    <div class="absolute inset-0 pointer-events-none border-2 border-green-500 opacity-50 flex items-center justify-center">
+                        <div class="w-64 h-64 border-2 border-white rounded-lg"></div>
+                    </div>
+                </div>
+                <p class="text-center text-sm text-gray-500 mt-4">Halakan kamera pada Kod QR yang disediakan oleh Pentadbir.</p>
+            </div>
+
+            <!-- 4. Admin Dashboard -->
+            <div id="page-admin" class="page-section">
+                <!-- Admin Tabs -->
+                <div class="flex p-1 bg-gray-200 rounded-lg mb-4">
+                    <button id="tab-dashboard" class="flex-1 py-2 text-sm font-medium rounded-md bg-white shadow text-green-700 transition">Dashboard</button>
+                    <button id="tab-qr" class="flex-1 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 transition">Jana QR</button>
+                </div>
+
+                <!-- Admin: Dashboard Tab -->
+                <div id="admin-view-dashboard">
+                    <div class="mb-4 flex gap-2 items-center justify-between">
+                         <div class="w-1/2">
+                            <select id="filterMonth" class="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-green-500 focus:border-green-500 block w-full p-2.5">
+                                <option value="current">Bulan Ini</option>
+                                <option value="all">Semua Rekod</option>
+                            </select>
+                         </div>
+                         <button id="btnExportCSV" class="bg-green-600 text-white text-xs px-3 py-2.5 rounded-lg shadow hover:bg-green-700 flex items-center gap-1">
+                             <i class="fa-solid fa-file-excel"></i> Export CSV
+                         </button>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div class="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                            <h3 class="font-bold text-gray-700">Analisis Kehadiran</h3>
+                            <div class="text-[10px] flex gap-2">
+                                <span class="flex items-center gap-1"><div class="w-2 h-2 bg-green-500 rounded-full"></div> Hadir</span>
+                                <span class="flex items-center gap-1"><div class="w-2 h-2 bg-red-500 rounded-full"></div> Tidak</span>
+                            </div>
+                        </div>
+                        <div id="adminStatsList" class="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
+                            <div class="p-8 text-center text-gray-400">Sedang memuatkan data...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin: QR Generator Tab -->
+                <div id="admin-view-qr" class="hidden">
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200 text-center space-y-8">
+                        
+                        <!-- QR Masuk -->
+                        <div class="border-b pb-6">
+                            <h3 class="font-bold text-green-700 mb-2 text-lg">1. Kod Imbas MASUK</h3>
+                            <div class="flex flex-col items-center">
+                                <div id="qrcode-in" class="bg-white p-2 border rounded-lg shadow-sm mb-3"></div>
+                                <div class="bg-green-50 text-green-800 text-xs px-3 py-2 rounded border border-green-200 break-all w-full">
+                                    <strong>Kandungan Kod:</strong><br>
+                                    <span class="font-mono">PASTI_ATTENDANCE_IN_SECURE_TOKEN_V1</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- QR Pulang -->
+                        <div>
+                            <h3 class="font-bold text-orange-600 mb-2 text-lg">2. Kod Imbas PULANG</h3>
+                            <div class="flex flex-col items-center">
+                                <div id="qrcode-out" class="bg-white p-2 border rounded-lg shadow-sm mb-3"></div>
+                                <div class="bg-orange-50 text-orange-800 text-xs px-3 py-2 rounded border border-orange-200 break-all w-full">
+                                    <strong>Kandungan Kod:</strong><br>
+                                    <span class="font-mono">PASTI_ATTENDANCE_OUT_SECURE_TOKEN_V1</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-blue-50 p-3 rounded text-sm text-blue-800 text-left">
+                            <i class="fa-solid fa-info-circle mr-1"></i> <strong>Nota:</strong> Cetak halaman ini atau tangkap layar kod QR di atas untuk diletakkan di pintu masuk/keluar.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- Toast Notification -->
+        <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm transition-opacity opacity-0 pointer-events-none z-50">
+            Mesej di sini
+        </div>
+
+    </div>
+
+    <!-- Firebase Logic (Modular SDK) -->
+    <script type="module">
+        // Import necessary Firebase modules
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { 
+            getAuth, 
+            signInWithCustomToken, 
+            signInAnonymously, 
+            onAuthStateChanged 
+        } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            query, 
+            where, 
+            onSnapshot, 
+            serverTimestamp,
+            getDocs,
+            orderBy 
+        } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        // --- Configuration & Constants ---
+        const QR_CODE_IN = "PASTI_ATTENDANCE_IN_SECURE_TOKEN_V1";
+        const QR_CODE_OUT = "PASTI_ATTENDANCE_OUT_SECURE_TOKEN_V1";
+        
+        // --- KONFIGURASI FIREBASE (WAJIB ISI UNTUK VERCEL) ---
+        // 1. Pergi ke Firebase Console > Project Settings > General > Your apps
+        // 2. Salin 'firebaseConfig' dan tampal di bawah (gantikan nilai placeholder)
+        const manualConfig = {
+            apiKey: "AIzaSyCQtQsuXQHK8IFy6TqDtz3J8106NW8cRiQ",
+            authDomain: "kehadiran-guru-pasti.firebaseapp.com",
+            projectId: "kehadiran-guru-pasti",
+            storageBucket: "kehadiran-guru-pasti.firebasestorage.app",
+            messagingSenderId: "605108935164",
+            appId: "1:605108935164:web:96cb7a2a5f4a9b81d5fa79",
+        };
+
+        // Logik pemilihan config (Automatik jika di Preview Canvas, Manual jika di Vercel/Hosting sendiri)
+        let firebaseConfig;
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            firebaseConfig = JSON.parse(__firebase_config);
+            console.log("Menggunakan Preview Config");
+        } else {
+            firebaseConfig = manualConfig;
+            console.log("Menggunakan Manual Config (Sila pastikan anda telah mengisi 'manualConfig' di dalam kod)");
+        }
+        
+        // Logik App ID (Gunakan ID unik jika di Canvas, atau 'pasti-live' jika di Vercel)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'pasti-attendance-live';
+
+        // --- Firebase Init ---
+        // Pastikan config wujud sebelum initialize
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Ralat Firebase Init. Pastikan config telah diisi.", e);
+            document.getElementById('loader-overlay').innerHTML = `
+                <div class="text-center p-4">
+                    <p class="text-red-600 font-bold mb-2">Ralat Konfigurasi</p>
+                    <p class="text-sm text-gray-600">Sila isi 'manualConfig' di dalam kod index.html dengan data dari Firebase Console anda.</p>
+                </div>
+            `;
+        }
+
+        // --- State Management ---
+        let currentUser = null;
+        let userData = { role: 'guest', name: '' };
+        let html5QrcodeScanner = null;
+        let attendanceUnsubscribe = null;
+        let allAdminRecords = [];
+
+        // --- DOM Elements ---
+        const loader = document.getElementById('loader-overlay');
+        const loginNameInput = document.getElementById('loginName');
+        const adminPinInput = document.getElementById('adminPin');
+        const teacherNameDisplay = document.getElementById('teacherNameDisplay');
+        const btnLogout = document.getElementById('btnLogout');
+
+        // --- Auth Logic ---
+        async function initAuth() {
+            try {
+                // Cuba Custom Token dahulu (Untuk Preview Canvas)
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } 
+                // Jika tiada custom token (Vercel/Live), guna Anonymous Auth
+                else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth error:", err);
+                showToast("Ralat sambungan. Semak konsol.", 'error');
+            }
+        }
+
+        if (auth) {
+            onAuthStateChanged(auth, (user) => {
+                if (loader) {
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.style.display = 'none', 500);
+                }
+
+                if (user) {
+                    currentUser = user;
+                    const storedProfile = localStorage.getItem('pasti_user_profile');
+                    if (storedProfile) {
+                        userData = JSON.parse(storedProfile);
+                        if(userData.role === 'admin') {
+                            navigateTo('admin');
+                            switchAdminTab('dashboard');
+                        } else {
+                            teacherNameDisplay.innerText = userData.name;
+                            navigateTo('teacher');
+                            loadTeacherData();
+                        }
+                    } else {
+                        navigateTo('login');
+                    }
+                } else {
+                    navigateTo('login');
+                }
+            });
+        }
+
+        // --- Navigation Functions ---
+        function navigateTo(pageId) {
+            document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(`page-${pageId}`).classList.add('active');
+            
+            if(pageId === 'login') btnLogout.classList.add('hidden');
+            else btnLogout.classList.remove('hidden');
+        }
+
+        // --- Button Events ---
+        document.getElementById('btnTeacherLogin').onclick = () => handleLogin('teacher');
+        document.getElementById('btnAdminLogin').onclick = () => handleLogin('admin');
+        document.getElementById('btnToggleAdmin').onclick = () => document.getElementById('adminPinArea').classList.toggle('hidden');
+        document.getElementById('btnLogout').onclick = () => logout();
+        document.getElementById('btnStartScanner').onclick = () => startScanner();
+        document.getElementById('btnStopScanner').onclick = () => stopScanner();
+        document.getElementById('tab-dashboard').onclick = () => switchAdminTab('dashboard');
+        document.getElementById('tab-qr').onclick = () => switchAdminTab('qr');
+        document.getElementById('filterMonth').onchange = () => loadAdminStats();
+        document.getElementById('btnExportCSV').onclick = () => exportDataToCSV();
+
+        // --- Feature Logic ---
+
+        async function handleLogin(role) {
+            if (!currentUser) {
+                showToast("Sila tunggu sistem bersedia...", 'error');
+                return;
+            }
+
+            if (role === 'admin') {
+                const pin = adminPinInput.value;
+                if (pin === '1234') { 
+                    userData = { role: 'admin', name: 'Pentadbir' };
+                    localStorage.setItem('pasti_user_profile', JSON.stringify(userData));
+                    switchAdminTab('dashboard');
+                    navigateTo('admin');
+                } else {
+                    showToast("Kod PIN salah!", 'error');
+                }
+            } else {
+                const name = loginNameInput.value.trim();
+                if (name.length < 3) {
+                    showToast("Sila masukkan nama penuh.", 'error');
+                    return;
+                }
+                userData = { role: 'teacher', name: name, uid: currentUser.uid };
+                
+                try {
+                    localStorage.setItem('pasti_user_profile', JSON.stringify(userData));
+                    teacherNameDisplay.innerText = name;
+                    loadTeacherData();
+                    navigateTo('teacher');
+                } catch(e) {
+                    console.error(e);
+                }
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('pasti_user_profile');
+            userData = { role: 'guest', name: '' };
+            if (attendanceUnsubscribe) attendanceUnsubscribe();
+            navigateTo('login');
+            loginNameInput.value = '';
+            adminPinInput.value = '';
+            document.getElementById('adminPinArea').classList.add('hidden');
+        }
+
+        // --- Teacher Data ---
+        function loadTeacherData() {
+            if(!currentUser) return;
+            const today = getTodayString();
+            
+            const attRef = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
+            const q = query(attRef, where('userId', '==', currentUser.uid));
+
+            attendanceUnsubscribe = onSnapshot(q, (snapshot) => {
+                const records = snapshot.docs.map(doc => doc.data());
+                const todayRecords = records.filter(r => r.dateString === today);
+                
+                const statusEl = document.getElementById('teacherStatus');
+                const timeEl = document.getElementById('teacherTime');
+                const iconEl = document.getElementById('statusIcon');
+
+                const checkIn = todayRecords.find(r => r.type === 'IN');
+                const checkOut = todayRecords.find(r => r.type === 'OUT');
+
+                if (checkOut) {
+                    statusEl.innerText = "Sudah Pulang";
+                    statusEl.className = "text-xl font-bold text-green-700";
+                    timeEl.innerText = `Keluar: ${formatTime(checkOut.timestamp?.toDate() || new Date())}`;
+                    iconEl.innerHTML = '<i class="fa-solid fa-check-circle text-green-600 text-2xl"></i>';
+                    iconEl.className = "w-12 h-12 rounded-full bg-green-100 flex items-center justify-center";
+                } else if (checkIn) {
+                    statusEl.innerText = "Hadir (Masuk)";
+                    statusEl.className = "text-xl font-bold text-blue-700";
+                    timeEl.innerText = `Masuk: ${formatTime(checkIn.timestamp?.toDate() || new Date())}`;
+                    iconEl.innerHTML = '<i class="fa-solid fa-person-walking-arrow-right text-blue-600 text-2xl"></i>';
+                    iconEl.className = "w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center";
+                } else {
+                    statusEl.innerText = "Belum Rekod";
+                    statusEl.className = "text-xl font-bold text-gray-800";
+                    timeEl.innerText = "-";
+                    iconEl.innerHTML = '<i class="fa-solid fa-clock text-gray-400 text-xl"></i>';
+                    iconEl.className = "w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center";
+                }
+
+                // Render History
+                const historyList = document.getElementById('myHistoryList');
+                historyList.innerHTML = '';
+                
+                records.sort((a, b) => {
+                    const tA = a.timestamp?.seconds || 0;
+                    const tB = b.timestamp?.seconds || 0;
+                    return tB - tA;
+                });
+                
+                if (records.length === 0) {
+                    historyList.innerHTML = '<div class="text-center py-4 text-gray-400">Tiada rekod.</div>';
+                }
+
+                records.slice(0, 5).forEach(rec => {
+                    const isIn = rec.type === 'IN';
+                    const colorClass = isIn ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-orange-600 bg-orange-50 border-orange-100';
+                    const icon = isIn ? 'fa-arrow-right-to-bracket' : 'fa-arrow-right-from-bracket';
+                    const timeStr = rec.timestamp ? formatTime(rec.timestamp.toDate()) : '...';
+                    const dateStr = rec.timestamp ? formatDate(rec.timestamp.toDate()) : '';
+
+                    historyList.innerHTML += `
+                        <div class="flex items-center justify-between p-3 rounded-lg border ${colorClass}">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm">
+                                    <i class="fa-solid ${icon} text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-sm text-gray-800">${isIn ? 'Masuk' : 'Pulang'}</p>
+                                    <p class="text-xs text-gray-500">${dateStr}</p>
+                                </div>
+                            </div>
+                            <span class="font-bold text-sm">${timeStr}</span>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        // --- Scanner Logic ---
+        function startScanner() {
+            navigateTo('scanner');
+            setTimeout(() => {
+                html5QrcodeScanner = new Html5Qrcode("reader");
+                const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+                html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {})
+                .catch(err => {
+                    console.error(err);
+                    showToast("Gagal membuka kamera.", 'error');
+                    stopScanner();
+                });
+            }, 300);
+        }
+
+        function stopScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.stop().then(() => {
+                    html5QrcodeScanner.clear();
+                    navigateTo('teacher');
+                }).catch(err => navigateTo('teacher'));
+            } else {
+                navigateTo('teacher');
+            }
+        }
+
+        async function onScanSuccess(decodedText, decodedResult) {
+            html5QrcodeScanner.stop().then(() => {
+                html5QrcodeScanner.clear();
+                processAttendance(decodedText);
+            });
+        }
+
+        async function processAttendance(code) {
+            let type = '';
+            if (code === QR_CODE_IN) type = 'IN';
+            else if (code === QR_CODE_OUT) type = 'OUT';
+            else {
+                showToast("Kod QR tidak sah!", 'error');
+                navigateTo('teacher');
+                return;
+            }
+
+            const todayStr = getTodayString();
+            try {
+                const attRef = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
+                await addDoc(attRef, {
+                    userId: currentUser.uid,
+                    userName: userData.name,
+                    type: type,
+                    timestamp: serverTimestamp(),
+                    dateString: todayStr
+                });
+                showToast(`Berjaya! Anda telah ${type === 'IN' ? 'Masuk' : 'Pulang'}.`);
+            } catch (error) {
+                console.error(error);
+                showToast("Ralat menyimpan data.", 'error');
+            }
+            navigateTo('teacher');
+        }
+
+        // --- Admin Logic ---
+        function switchAdminTab(tab) {
+            document.getElementById('admin-view-dashboard').classList.add('hidden');
+            document.getElementById('admin-view-qr').classList.add('hidden');
+            document.getElementById('tab-dashboard').className = "flex-1 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 transition";
+            document.getElementById('tab-qr').className = "flex-1 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 transition";
+
+            if(tab === 'dashboard') {
+                document.getElementById('admin-view-dashboard').classList.remove('hidden');
+                document.getElementById('tab-dashboard').className = "flex-1 py-2 text-sm font-medium rounded-md bg-white shadow text-green-700 transition";
+                loadAdminStats();
+            } else {
+                document.getElementById('admin-view-qr').classList.remove('hidden');
+                document.getElementById('tab-qr').className = "flex-1 py-2 text-sm font-medium rounded-md bg-white shadow text-green-700 transition";
+                generateAdminQRs();
+            }
+        }
+
+        function generateAdminQRs() {
+            const containerIn = document.getElementById("qrcode-in");
+            const containerOut = document.getElementById("qrcode-out");
+            containerIn.innerHTML = "";
+            containerOut.innerHTML = "";
+
+            new QRCode(containerIn, {
+                text: QR_CODE_IN, width: 150, height: 150,
+                colorDark : "#166534", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H
+            });
+
+            new QRCode(containerOut, {
+                text: QR_CODE_OUT, width: 150, height: 150,
+                colorDark : "#c2410c", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H
+            });
+        }
+
+        async function loadAdminStats() {
+            const listContainer = document.getElementById('adminStatsList');
+            const filterMonth = document.getElementById('filterMonth').value;
+            listContainer.innerHTML = '<div class="p-8 text-center text-gray-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Sedang memuatkan...</div>';
+
+            try {
+                const attRef = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
+                const snapshot = await getDocs(attRef);
+                
+                let allRecords = snapshot.docs.map(doc => doc.data());
+                
+                if (filterMonth === 'current') {
+                    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+                    allRecords = allRecords.filter(r => r.dateString && r.dateString.startsWith(currentMonth));
+                }
+
+                const users = {};
+                allRecords.forEach(rec => {
+                    if (!users[rec.userId]) {
+                        users[rec.userId] = { name: rec.userName, records: {} };
+                    }
+                    if (!users[rec.userId].records[rec.dateString]) {
+                        users[rec.userId].records[rec.dateString] = { in: null, out: null };
+                    }
+                    
+                    const recTime = rec.timestamp ? rec.timestamp.toDate() : new Date();
+                    if (rec.type === 'IN') {
+                        const currentIn = users[rec.userId].records[rec.dateString].in;
+                        if (!currentIn || recTime < currentIn) users[rec.userId].records[rec.dateString].in = recTime;
+                    } else {
+                        const currentOut = users[rec.userId].records[rec.dateString].out;
+                        if (!currentOut || recTime > currentOut) users[rec.userId].records[rec.dateString].out = recTime;
+                    }
+                });
+
+                allAdminRecords = [];
+                for(const uid in users) {
+                    const u = users[uid];
+                    for(const date in u.records) {
+                        allAdminRecords.push({
+                            name: u.name,
+                            date: date,
+                            timeIn: u.records[date].in ? formatTime(u.records[date].in) : '-',
+                            timeOut: u.records[date].out ? formatTime(u.records[date].out) : '-',
+                            status: (u.records[date].in && u.records[date].out) ? 'Lengkap' : 'Tidak Lengkap'
+                        });
+                    }
+                }
+
+                renderAdminVisuals(users);
+
+            } catch (err) {
+                console.error(err);
+                listContainer.innerHTML = '<div class="p-4 text-red-500">Ralat memuatkan data.</div>';
+            }
+        }
+
+        function renderAdminVisuals(users) {
+            const listContainer = document.getElementById('adminStatsList');
+            listContainer.innerHTML = '';
+            
+            const userIds = Object.keys(users);
+            if (userIds.length === 0) {
+                listContainer.innerHTML = '<div class="p-8 text-center text-gray-400">Tiada rekod dijumpai.</div>';
+                return;
+            }
+
+            const dates = [];
+            for(let i=0; i<7; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                dates.push(d.toISOString().split('T')[0]);
+            }
+            dates.reverse();
+
+            userIds.forEach(uid => {
+                const user = users[uid];
+                let barsHtml = `<div class="flex gap-1 mt-2">`;
+                
+                dates.forEach(dateStr => {
+                    const dayData = user.records[dateStr];
+                    let barColor = 'bg-red-500'; 
+                    let tooltip = `Tarikh: ${dateStr} - Tidak Hadir`;
+
+                    if (dayData) {
+                        if (dayData.in && dayData.out) {
+                            barColor = 'bg-green-500';
+                            tooltip = `${dateStr}: Hadir Penuh`;
+                        } else if (dayData.in) {
+                            barColor = 'bg-yellow-400';
+                            tooltip = `${dateStr}: Belum Pulang`;
+                        }
+                    }
+                    barsHtml += `<div class="h-6 flex-1 rounded-sm ${barColor}" title="${tooltip}"></div>`;
+                });
+                barsHtml += `</div>`;
+                barsHtml += `<div class="flex justify-between text-[10px] text-gray-400 mt-1"><span>7 Hari Lepas</span><span>Hari Ini</span></div>`;
+
+                const totalPresent = Object.keys(user.records).length;
+
+                listContainer.innerHTML += `
+                    <div class="p-4 hover:bg-gray-50 transition">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-lg">${user.name}</h4>
+                                <p class="text-xs text-gray-500">Hadir: ${totalPresent} hari</p>
+                            </div>
+                        </div>
+                        ${barsHtml}
+                    </div>
+                `;
+            });
+        }
+
+        function exportDataToCSV() {
+            if (!allAdminRecords || allAdminRecords.length === 0) {
+                showToast("Tiada data untuk dieksport.", 'error');
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Nama,Tarikh,Masa Masuk,Masa Pulang,Status\n";
+
+            allAdminRecords.forEach(row => {
+                csvContent += `${row.name},${row.date},${row.timeIn},${row.timeOut},${row.status}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Laporan_Kehadiran_Pasti_${getTodayString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- Helpers ---
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-sm transition-opacity z-50 font-medium ${type === 'error' ? 'bg-red-600 text-white' : 'bg-gray-800 text-white'}`;
+            toast.style.opacity = '1';
+            setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+        }
+
+        function formatDate(dateObj) {
+            const options = { day: 'numeric', month: 'short', year: 'numeric' };
+            return dateObj.toLocaleDateString('ms-MY', options);
+        }
+
+        function formatTime(dateObj) {
+            let hours = dateObj.getHours();
+            let minutes = dateObj.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; 
+            minutes = minutes < 10 ? '0'+minutes : minutes;
+            return hours + ':' + minutes + ' ' + ampm;
+        }
+
+        function getTodayString() {
+            const now = new Date();
+            return now.toISOString().split('T')[0];
+        }
+
+        // --- Init ---
+        if (firebaseConfig) {
+            initAuth();
+        }
+
+    </script>
+</body>
+</html>
