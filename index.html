@@ -1,758 +1,429 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer,
-  Cell,
-  LineChart,
-  Line
-} from 'recharts';
-import { 
-  QrCode, 
-  UserCheck, 
-  LogOut, 
-  LogIn,
-  CalendarOff, 
-  Lock, 
-  Unlock, 
-  Activity,
-  Save,
-  Clock,
-  Calendar,
-  ScanLine,
-  TrendingUp,
-  FileText,
-  PieChart,
-  Briefcase,
-  Printer,
-  ArrowRightCircle,
-  ArrowLeftCircle
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Kehadiran Guru PASTI</title>
+    
+    <!-- 1. TAILWIND CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. REACT & REACT DOM -->
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- 3. DEPENDENCIES UTK RECHARTS (PENTING) -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
 
-// --- MOCK DATA (Simulasi Pangkalan Data) ---
-const initialTeachers = [
-  { id: 'G01', name: 'Cikgu Aishah', status: 'Hadir', timeIn: '07:30', timeOut: '13:00', reason: '' },
-  { id: 'G02', name: 'Cikgu Fatimah', status: 'Hadir', timeIn: '07:45', timeOut: '--:--', reason: '' },
-  { id: 'G03', name: 'Cikgu Rahman', status: 'Cuti', timeIn: '--:--', timeOut: '--:--', reason: 'Demam panas' },
-  { id: 'G04', name: 'Cikgu Zulkifli', status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: '' },
-  { id: 'G05', name: 'Cikgu Hawa', status: 'Tugas Luar', timeIn: '08:00', timeOut: '--:--', reason: 'Mesyuarat Kawasan' },
-];
+    <!-- 4. RECHARTS (Guna CDNJS yang lebih stabil untuk UMD) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js"></script>
 
-// --- MOCK DATA: ANALISA ---
-const mockYearlyData = [
-  { name: 'Jan', hadir: 95, cuti: 2, tidakHadir: 3 },
-  { name: 'Feb', hadir: 92, cuti: 5, tidakHadir: 3 },
-  { name: 'Mac', hadir: 98, cuti: 1, tidakHadir: 1 },
-  { name: 'Apr', hadir: 85, cuti: 10, tidakHadir: 5 },
-  { name: 'Mei', hadir: 90, cuti: 5, tidakHadir: 5 },
-  { name: 'Jun', hadir: 88, cuti: 8, tidakHadir: 4 },
-  { name: 'Jul', hadir: 96, cuti: 2, tidakHadir: 2 },
-  { name: 'Ogo', hadir: 93, cuti: 4, tidakHadir: 3 },
-  { name: 'Sep', hadir: 95, cuti: 3, tidakHadir: 2 },
-  { name: 'Okt', hadir: 91, cuti: 6, tidakHadir: 3 },
-  { name: 'Nov', hadir: 97, cuti: 2, tidakHadir: 1 },
-  { name: 'Dis', hadir: 80, cuti: 15, tidakHadir: 5 },
-];
+    <!-- 5. BABEL -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-const mockMonthlyPerformance = [
-  { name: 'Cikgu Aishah', peratus: 98, lewat: 0, grade: 'A' },
-  { name: 'Cikgu Fatimah', peratus: 95, lewat: 2, grade: 'A-' },
-  { name: 'Cikgu Rahman', peratus: 85, lewat: 5, grade: 'B' },
-  { name: 'Cikgu Zulkifli', peratus: 90, lewat: 3, grade: 'B+' },
-  { name: 'Cikgu Hawa', peratus: 100, lewat: 0, grade: 'A+' },
-];
+    <!-- 6. PHOSPHOR ICONS -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
-export default function SistemKehadiranPasti() {
-  const [view, setView] = useState('dashboard'); // dashboard, scan, admin
-  const [teachers, setTeachers] = useState(initialTeachers);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  
-  // State Admin
-  const [adminTab, setAdminTab] = useState('overview'); // 'overview' | 'analysis'
-
-  // State untuk borang imbasan (Simulasi Scan)
-  // MODES: 'clock_in', 'clock_out', 'leave', 'outstation'
-  const [scanMode, setScanMode] = useState(null); 
-  const [selectedTeacherId, setSelectedTeacherId] = useState('');
-  const [leaveReason, setLeaveReason] = useState('');
-  const [scanMessage, setScanMessage] = useState('');
-
-  // State untuk Print Mode
-  const [isPrinting, setIsPrinting] = useState(false);
-
-  // --- LOGIC: Kira Statistik untuk Graf Bar ---
-  const getChartData = () => {
-    const stats = {
-      Hadir: 0,
-      'Dalam Proses': 0,
-      Cuti: 0,
-      'Tugas Luar': 0,
-      'Tidak Hadir': 0
-    };
-
-    teachers.forEach(t => {
-      if (t.status === 'Hadir' && t.timeOut !== '--:--') stats['Hadir']++;
-      else if (t.status === 'Hadir' && t.timeOut === '--:--') stats['Dalam Proses']++;
-      else if (t.status === 'Cuti') stats['Cuti']++;
-      else if (t.status === 'Tugas Luar') stats['Tugas Luar']++;
-      else stats['Tidak Hadir']++;
-    });
-
-    return [
-      { name: 'Selesai', jumlah: stats['Hadir'], fill: '#22c55e' }, // Green
-      { name: 'Bertugas', jumlah: stats['Dalam Proses'], fill: '#3b82f6' }, // Blue
-      { name: 'T. Luar', jumlah: stats['Tugas Luar'], fill: '#8b5cf6' }, // Purple
-      { name: 'Cuti', jumlah: stats['Cuti'], fill: '#eab308' }, // Yellow
-      { name: 'Tiada', jumlah: stats['Tidak Hadir'], fill: '#ef4444' }, // Red
-    ];
-  };
-
-  // --- LOGIC: Proses Kehadiran ---
-  const handleAttendanceSubmit = () => {
-    if (!selectedTeacherId) return;
-
-    const now = new Date();
-    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    setTeachers(prev => prev.map(t => {
-      if (t.id === selectedTeacherId) {
+    <style>
+        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
-        // 1. Scan Masuk (Clock In)
-        if (scanMode === 'clock_in') {
-          // Hanya update jika belum hadir, atau reset jika status lain
-          return { ...t, status: 'Hadir', timeIn: timeString, timeOut: '--:--', reason: '' };
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
-        
-        // 2. Scan Balik (Clock Out)
-        else if (scanMode === 'clock_out') {
-           // Hanya update masa balik, kekalkan status 'Hadir'
-           // Jika guru belum scan masuk tapi scan balik, kita rekod juga (atau boleh handle error)
-           return { ...t, timeOut: timeString };
+        .print-only { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Semak jika React wujud
+        if (!window.React || !window.ReactDOM) {
+            document.getElementById('root').innerHTML = '<div class="p-4 text-red-600 font-bold">Ralat: React gagal dimuatkan. Sila refresh.</div>';
         }
+
+        const { useState, useEffect } = React;
         
-        // 3. Scan Cuti
-        else if (scanMode === 'leave') {
-          return { ...t, status: 'Cuti', reason: leaveReason, timeIn: '--:--', timeOut: '--:--' };
-        }
-        
-        // 4. Scan Tugas Luar
-        else if (scanMode === 'outstation') {
-          return { ...t, status: 'Tugas Luar', reason: leaveReason, timeIn: timeString, timeOut: '--:--' };
-        }
-      }
-      return t;
-    }));
+        // --- SAFE RECHARTS ACCESS ---
+        // Kita ambil objek dari window.Recharts. Jika tiada, guna objek kosong untuk elak crash.
+        const RechartsObj = window.Recharts || {};
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } = RechartsObj;
 
-    setScanMessage(`Berjaya direkodkan pada ${timeString}`);
-    setTimeout(() => {
-      setScanMessage('');
-      setLeaveReason('');
-      setSelectedTeacherId('');
-      setView('dashboard');
-    }, 2000);
-  };
+        // --- MOCK DATA ---
+        const initialTeachers = [
+            { id: 'G01', name: 'Cikgu Aishah', status: 'Hadir', timeIn: '07:30', timeOut: '13:00', reason: '' },
+            { id: 'G02', name: 'Cikgu Fatimah', status: 'Hadir', timeIn: '07:45', timeOut: '--:--', reason: '' },
+            { id: 'G03', name: 'Cikgu Rahman', status: 'Cuti', timeIn: '--:--', timeOut: '--:--', reason: 'Demam panas' },
+            { id: 'G04', name: 'Cikgu Zulkifli', status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: '' },
+            { id: 'G05', name: 'Cikgu Hawa', status: 'Tugas Luar', timeIn: '08:00', timeOut: '--:--', reason: 'Mesyuarat Kawasan' },
+        ];
 
-  // --- LOGIC: Cetak QR ---
-  const handlePrint = () => {
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrinting(false);
-    }, 500);
-  };
+        const mockYearlyData = [
+            { name: 'Jan', hadir: 95, cuti: 2, tidakHadir: 3 },
+            { name: 'Feb', hadir: 92, cuti: 5, tidakHadir: 3 },
+            { name: 'Mac', hadir: 98, cuti: 1, tidakHadir: 1 },
+            { name: 'Apr', hadir: 85, cuti: 10, tidakHadir: 5 },
+            { name: 'Mei', hadir: 90, cuti: 5, tidakHadir: 5 },
+            { name: 'Jun', hadir: 88, cuti: 8, tidakHadir: 4 },
+            { name: 'Jul', hadir: 96, cuti: 2, tidakHadir: 2 },
+            { name: 'Ogo', hadir: 93, cuti: 4, tidakHadir: 3 },
+            { name: 'Sep', hadir: 95, cuti: 3, tidakHadir: 2 },
+            { name: 'Okt', hadir: 91, cuti: 6, tidakHadir: 3 },
+            { name: 'Nov', hadir: 97, cuti: 2, tidakHadir: 1 },
+            { name: 'Dis', hadir: 80, cuti: 15, tidakHadir: 5 },
+        ];
 
-  // --- LOGIC: Admin Login ---
-  const handleLogin = () => {
-    if (passwordInput === 'admin321') {
-      setIsAdmin(true);
-      setPasswordInput('');
-    } else {
-      alert('Kata laluan salah!');
-    }
-  };
+        const mockMonthlyPerformance = [
+            { name: 'Cikgu Aishah', peratus: 98, lewat: 0, grade: 'A' },
+            { name: 'Cikgu Fatimah', peratus: 95, lewat: 2, grade: 'A-' },
+            { name: 'Cikgu Rahman', peratus: 85, lewat: 5, grade: 'B' },
+            { name: 'Cikgu Zulkifli', peratus: 90, lewat: 3, grade: 'B+' },
+            { name: 'Cikgu Hawa', peratus: 100, lewat: 0, grade: 'A+' },
+        ];
 
-  // --- UI COMPONENTS ---
+        function App() {
+            const [view, setView] = useState('dashboard');
+            const [teachers, setTeachers] = useState(initialTeachers);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [passwordInput, setPasswordInput] = useState('');
+            const [adminTab, setAdminTab] = useState('overview');
+            const [scanMode, setScanMode] = useState(null); 
+            const [selectedTeacherId, setSelectedTeacherId] = useState('');
+            const [leaveReason, setLeaveReason] = useState('');
+            const [scanMessage, setScanMessage] = useState('');
+            const [isPrinting, setIsPrinting] = useState(false);
 
-  // 1. HEADER
-  const Header = () => (
-    <div className={`bg-green-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 print:hidden`}>
-      <div className="flex items-center gap-2">
-        <UserCheck size={28} />
-        <div>
-          <h1 className="text-xl font-bold leading-none">Sistem Guru PASTI</h1>
-          <p className="text-xs text-green-100 opacity-90">Rekod Kehadiran Pintar</p>
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <button 
-          onClick={() => setView('dashboard')} 
-          className={`px-3 py-1 rounded text-sm transition-colors ${view === 'dashboard' ? 'bg-white text-green-700 font-bold' : 'bg-green-700 hover:bg-green-800'}`}
-        >
-          Utama
-        </button>
-        <button 
-          onClick={() => setView('scan')} 
-          className={`px-3 py-1 rounded text-sm transition-colors ${view === 'scan' ? 'bg-white text-green-700 font-bold' : 'bg-green-700 hover:bg-green-800'}`}
-        >
-          Scan QR
-        </button>
-        <button 
-          onClick={() => setView('admin')} 
-          className={`px-3 py-1 rounded text-sm transition-colors ${view === 'admin' ? 'bg-white text-green-700 font-bold' : 'bg-green-700 hover:bg-green-800'}`}
-        >
-          {isAdmin ? 'Admin' : 'Login'}
-        </button>
-      </div>
-    </div>
-  );
+            // Periksa jika Recharts berjaya dimuatkan
+            const isRechartsLoaded = !!window.Recharts;
 
-  // 2. DASHBOARD (PUBLIC VIEW)
-  const DashboardView = () => {
-    const data = getChartData();
-    const today = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateString = today.toLocaleDateString('ms-MY', options);
+            const getChartData = () => {
+                const stats = { Hadir: 0, 'Dalam Proses': 0, Cuti: 0, 'Tugas Luar': 0, 'Tidak Hadir': 0 };
+                teachers.forEach(t => {
+                    if (t.status === 'Hadir' && t.timeOut !== '--:--') stats['Hadir']++;
+                    else if (t.status === 'Hadir' && t.timeOut === '--:--') stats['Dalam Proses']++;
+                    else if (t.status === 'Cuti') stats['Cuti']++;
+                    else if (t.status === 'Tugas Luar') stats['Tugas Luar']++;
+                    else stats['Tidak Hadir']++;
+                });
+                return [
+                    { name: 'Selesai', jumlah: stats['Hadir'], fill: '#22c55e' },
+                    { name: 'Bertugas', jumlah: stats['Dalam Proses'], fill: '#3b82f6' },
+                    { name: 'T. Luar', jumlah: stats['Tugas Luar'], fill: '#8b5cf6' },
+                    { name: 'Cuti', jumlah: stats['Cuti'], fill: '#eab308' },
+                    { name: 'Tiada', jumlah: stats['Tidak Hadir'], fill: '#ef4444' },
+                ];
+            };
 
-    return (
-      <div className="p-4 space-y-6 max-w-4xl mx-auto animate-fade-in print:hidden">
-        {/* Statistik Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {data.map((item, idx) => (
-            <div key={idx} className="bg-white p-3 rounded-lg shadow border-l-4 transform transition hover:scale-105" style={{ borderLeftColor: item.fill }}>
-              <p className="text-gray-500 text-xs font-semibold uppercase">{item.name}</p>
-              <p className="text-2xl font-bold text-gray-800">{item.jumlah}</p>
-            </div>
-          ))}
-        </div>
+            const handleAttendanceSubmit = () => {
+                if (!selectedTeacherId) return;
+                const now = new Date();
+                const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-        {/* Graf Bar */}
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 gap-2">
-            <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-              <Activity size={20} /> Statistik Harian
-            </h3>
-            {/* Paparan Tarikh */}
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">
-              <Calendar size={16} className="text-green-600" />
-              <span>{dateString}</span>
-            </div>
-          </div>
-
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 12}} />
-                <Tooltip cursor={{fill: 'transparent'}} />
-                <Bar dataKey="jumlah" radius={[0, 4, 4, 0]} barSize={30}>
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Senarai Kehadiran Penuh */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
-            <h3 className="font-bold text-gray-700">Senarai Kehadiran Penuh</h3>
-            <div className="text-xs text-gray-400 italic">Dikemaskini serta-merta</div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-100">
-                <tr>
-                  <th className="px-4 py-3">Nama Guru</th>
-                  <th className="px-4 py-3">Masuk</th>
-                  <th className="px-4 py-3">Balik</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Catatan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teachers.map((t, idx) => {
-                  let statusColor = "bg-white hover:bg-gray-50";
-                  let badgeColor = "bg-gray-100 text-gray-800";
-                  
-                  if (t.status === 'Tidak Hadir') {
-                    statusColor = "bg-red-50 hover:bg-red-100";
-                    badgeColor = "bg-red-100 text-red-800";
-                  } else if (t.status === 'Cuti') {
-                    badgeColor = "bg-yellow-100 text-yellow-800";
-                  } else if (t.status === 'Hadir') {
-                    badgeColor = "bg-green-100 text-green-800";
-                  } else if (t.status === 'Tugas Luar') {
-                    badgeColor = "bg-purple-100 text-purple-800";
-                  }
-
-                  return (
-                    <tr key={idx} className={`border-b transition-colors ${statusColor}`}>
-                      <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
-                      <td className="px-4 py-3 font-mono text-gray-600">{t.timeIn}</td>
-                      <td className="px-4 py-3 font-mono text-gray-600">{t.timeOut}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${badgeColor}`}>
-                          {t.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 italic truncate max-w-xs">
-                        {t.reason || '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // 3. SCAN VIEW & PRINTABLE QRS
-  const ScanView = () => (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <div className={`bg-white rounded-xl shadow-lg p-6 md:p-10 text-center space-y-8 ${isPrinting ? 'hidden' : ''} print:hidden`}>
-        
-        {!scanMode ? (
-          <>
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-6">
-              <div className="text-left">
-                <h2 className="text-3xl font-bold text-gray-800">Sila Imbas QR</h2>
-                <p className="text-gray-500">Pilih kod QR yang sesuai untuk aktiviti anda</p>
-              </div>
-              <button 
-                onClick={handlePrint}
-                className="flex items-center gap-2 bg-gray-800 text-white px-5 py-3 rounded-lg shadow hover:bg-gray-900 transition-all"
-              >
-                <Printer size={20} /> Cetak Kod QR
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 justify-center items-stretch mt-4">
-              
-              {/* QR 1: MASUK - Warna BIRU */}
-              <div 
-                onClick={() => setScanMode('clock_in')}
-                className="cursor-pointer group relative bg-white border-2 border-blue-100 rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:border-blue-500 transition-all duration-300 transform hover:-translate-y-1"
-              >
-                <div className="bg-white p-2 rounded-xl mb-4 border shadow-sm">
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_IN&color=1d4ed8`} 
-                    alt="QR Masuk" 
-                    className="w-28 h-28 object-contain"
-                  />
-                </div>
-                <h3 className="text-xl font-bold text-blue-900 mb-2">QR MASUK</h3>
-                <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-3 py-1 rounded-full font-semibold text-sm">
-                   <LogIn size={16} /> Datang Sekolah
-                </div>
-              </div>
-
-               {/* QR 2: BALIK - Warna MERAH JAMBU (ROSE) */}
-               <div 
-                onClick={() => setScanMode('clock_out')}
-                className="cursor-pointer group relative bg-white border-2 border-rose-100 rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:border-rose-500 transition-all duration-300 transform hover:-translate-y-1"
-              >
-                <div className="bg-white p-2 rounded-xl mb-4 border shadow-sm">
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_OUT&color=be123c`} 
-                    alt="QR Balik" 
-                    className="w-28 h-28 object-contain"
-                  />
-                </div>
-                <h3 className="text-xl font-bold text-rose-900 mb-2">QR BALIK</h3>
-                <div className="flex items-center gap-2 text-rose-600 bg-rose-50 px-3 py-1 rounded-full font-semibold text-sm">
-                   <LogOut size={16} /> Pulang Sekolah
-                </div>
-              </div>
-
-               {/* QR 3: Tugas Luar - Warna UNGU */}
-               <div 
-                onClick={() => setScanMode('outstation')}
-                className="cursor-pointer group relative bg-white border-2 border-purple-100 rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:border-purple-500 transition-all duration-300 transform hover:-translate-y-1"
-              >
-                <div className="bg-white p-2 rounded-xl mb-4 border shadow-sm">
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_OUTSTATION&color=7e22ce`} 
-                    alt="QR Tugas Luar" 
-                    className="w-28 h-28 object-contain"
-                  />
-                </div>
-                <h3 className="text-xl font-bold text-purple-900 mb-2">TUGAS LUAR</h3>
-                <div className="flex items-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full font-semibold text-sm">
-                   <Briefcase size={16} /> Kursus / Mesyuarat
-                </div>
-              </div>
-
-              {/* QR 4: Cuti - Warna OREN */}
-              <div 
-                onClick={() => setScanMode('leave')}
-                className="cursor-pointer group relative bg-white border-2 border-orange-100 rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:border-orange-500 transition-all duration-300 transform hover:-translate-y-1"
-              >
-                <div className="bg-white p-2 rounded-xl mb-4 border shadow-sm">
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_LEAVE&color=c2410c`} 
-                    alt="QR Cuti" 
-                    className="w-28 h-28 object-contain"
-                  />
-                </div>
-                <h3 className="text-xl font-bold text-orange-900 mb-2">CUTI / MC</h3>
-                <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full font-semibold text-sm">
-                   <CalendarOff size={16} /> Borang Cuti
-                </div>
-              </div>
-            </div>
-            
-            <p className="text-xs text-gray-400 mt-4">Klik pada mana-mana QR di atas untuk simulasi imbasan oleh guru.</p>
-          </>
-        ) : (
-          <div className="max-w-md mx-auto text-left animate-fade-in py-8">
-             {/* Header Simulasi */}
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b">
-               <div className={`p-3 rounded-full 
-                 ${scanMode === 'clock_in' ? 'bg-blue-100 text-blue-600' : 
-                   scanMode === 'clock_out' ? 'bg-rose-100 text-rose-600' : 
-                   scanMode === 'outstation' ? 'bg-purple-100 text-purple-600' : 
-                   'bg-orange-100 text-orange-600'}`}>
-                 <ScanLine size={24} />
-               </div>
-               <div>
-                 <h3 className="font-bold text-xl text-gray-800">
-                   {scanMode === 'clock_in' ? 'Mengesan QR Masuk...' : 
-                    scanMode === 'clock_out' ? 'Mengesan QR Balik...' :
-                    scanMode === 'outstation' ? 'Mengesan QR Tugas Luar...' :
-                    'Mengesan QR Cuti...'}
-                 </h3>
-                 <button onClick={() => { setScanMode(null); setScanMessage(''); }} className="text-sm text-gray-500 hover:text-gray-800 underline">
-                   Kembali ke skrin utama
-                 </button>
-               </div>
-            </div>
-
-            {/* Simulasi Kamera mengesan ID Guru */}
-            <div className="space-y-4 bg-gray-50 p-6 rounded-lg border border-gray-200">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Simulasi: Pilih ID Guru</label>
-                <select 
-                  className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-green-500 outline-none"
-                  value={selectedTeacherId}
-                  onChange={(e) => setSelectedTeacherId(e.target.value)}
-                >
-                  <option value="">-- Sila Scan/Pilih ID --</option>
-                  {teachers.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.id})</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Jika Mod Cuti ATAU Tugas Luar, tunjuk input alasan/catatan */}
-              {(scanMode === 'leave' || scanMode === 'outstation') && (
-                <div className="animate-fade-in">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    {scanMode === 'leave' ? 'Nyatakan Sebab Cuti/MC' : 'Lokasi/Tujuan Tugas Luar'}
-                  </label>
-                  <textarea 
-                    className={`w-full p-3 border rounded-lg outline-none focus:ring-2 
-                      ${scanMode === 'leave' ? 'focus:ring-orange-500' : 'focus:ring-purple-500'}`}
-                    rows="3"
-                    placeholder={scanMode === 'leave' ? "Contoh: Demam, Urusan Keluarga..." : "Contoh: Mesyuarat di PPD, Kursus Khas..."}
-                    value={leaveReason}
-                    onChange={(e) => setLeaveReason(e.target.value)}
-                  ></textarea>
-                </div>
-              )}
-
-              <button 
-                onClick={handleAttendanceSubmit}
-                disabled={!selectedTeacherId}
-                className={`w-full py-3 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95
-                  ${selectedTeacherId 
-                    ? (scanMode === 'clock_in' ? 'bg-blue-600 hover:bg-blue-700' : 
-                       scanMode === 'clock_out' ? 'bg-rose-600 hover:bg-rose-700' : 
-                       scanMode === 'outstation' ? 'bg-purple-600 hover:bg-purple-700' :
-                       'bg-orange-500 hover:bg-orange-600') 
-                    : 'bg-gray-300 cursor-not-allowed'}
-                `}
-              >
-                {scanMessage ? 'Data Disimpan!' : 'Sahkan & Hantar'}
-              </button>
-              
-              {scanMessage && (
-                <div className="p-3 bg-green-100 text-green-700 rounded-lg text-center text-sm font-bold mt-2 animate-bounce">
-                  {scanMessage}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* --- PAPARAN CETAKAN (Hanya muncul bila isPrinting=true atau user tekan Print) --- */}
-      <div className={`${isPrinting ? 'block' : 'hidden'} print:block print:w-full print:h-screen print:absolute print:top-0 print:left-0 bg-white p-8`}>
-        <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
-          <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN PASTI</h1>
-          <p className="text-gray-600 text-lg mt-2">Sila imbas kod yang berkenaan.</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-8 items-start">
-          
-          {/* Print Item 1 - MASUK */}
-          <div className="flex flex-col items-center border-4 border-blue-600 rounded-2xl p-6 text-center h-full">
-            <h2 className="text-3xl font-extrabold text-blue-800 mb-2">QR MASUK</h2>
-            <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=PASTI_CLOCK_IN&color=000000`} 
-              alt="QR Masuk" 
-              className="w-48 h-48 border-2 border-gray-200 mb-4"
-            />
-            <p className="text-xl text-gray-700 font-semibold">REKOD DATANG</p>
-            <p className="text-gray-500 mt-2 text-sm">Imbas semasa tiba di sekolah.</p>
-          </div>
-
-          {/* Print Item 2 - BALIK */}
-          <div className="flex flex-col items-center border-4 border-rose-600 rounded-2xl p-6 text-center h-full">
-            <h2 className="text-3xl font-extrabold text-rose-800 mb-2">QR BALIK</h2>
-            <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=PASTI_CLOCK_OUT&color=000000`} 
-              alt="QR Balik" 
-              className="w-48 h-48 border-2 border-gray-200 mb-4"
-            />
-            <p className="text-xl text-gray-700 font-semibold">REKOD PULANG</p>
-            <p className="text-gray-500 mt-2 text-sm">Imbas semasa balik dari sekolah.</p>
-          </div>
-
-          {/* Print Item 3 - TUGAS LUAR */}
-          <div className="flex flex-col items-center border-4 border-purple-600 rounded-2xl p-6 text-center h-full">
-            <h2 className="text-3xl font-extrabold text-purple-800 mb-2">TUGAS LUAR</h2>
-            <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=PASTI_OUTSTATION&color=000000`} 
-              alt="QR Tugas Luar" 
-              className="w-48 h-48 border-2 border-gray-200 mb-4"
-            />
-            <p className="text-xl text-gray-700 font-semibold">KURSUS / MESYUARAT</p>
-            <p className="text-gray-500 mt-2 text-sm">Imbas untuk rekod tugas rasmi luar.</p>
-          </div>
-
-          {/* Print Item 4 - CUTI */}
-          <div className="flex flex-col items-center border-4 border-orange-600 rounded-2xl p-6 text-center h-full">
-            <h2 className="text-3xl font-extrabold text-orange-800 mb-2">CUTI / MC</h2>
-            <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=PASTI_LEAVE&color=000000`} 
-              alt="QR Cuti" 
-              className="w-48 h-48 border-2 border-gray-200 mb-4"
-            />
-            <p className="text-xl text-gray-700 font-semibold">REKOD TIDAK HADIR</p>
-            <p className="text-gray-500 mt-2 text-sm">Imbas untuk borang cuti/MC.</p>
-          </div>
-
-        </div>
-        <div className="text-center mt-12 text-sm text-gray-400">
-          Dijana oleh Sistem Kehadiran PASTI
-        </div>
-      </div>
-
-    </div>
-  );
-
-  // 4. ADMIN VIEW
-  const AdminView = () => {
-    if (!isAdmin) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-[50vh] p-4 print:hidden">
-          <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-sm text-center border-t-4 border-gray-800">
-            <Lock className="mx-auto mb-4 text-gray-700" size={40} />
-            <h2 className="text-2xl font-bold mb-2 text-gray-800">Akses Pentadbir</h2>
-            <p className="text-gray-500 text-sm mb-6">Sila masukkan kata laluan untuk meneruskan.</p>
-            <input 
-              type="password" 
-              placeholder="Kata Laluan" 
-              className="w-full p-3 border rounded-lg mb-4 text-center focus:ring-2 focus:ring-gray-800 outline-none"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-            />
-            <button onClick={handleLogin} className="w-full bg-gray-800 hover:bg-gray-900 text-white py-3 rounded-lg font-bold transition-colors">
-              Log Masuk
-            </button>
-            <div className="mt-4 text-xs text-gray-400">Hint: admin123</div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="p-4 max-w-5xl mx-auto print:hidden">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">Panel Pentadbir</h2>
-            <p className="text-gray-500 text-sm">Pengurusan Data & Analisa Prestasi</p>
-          </div>
-          <button 
-            onClick={() => { setIsAdmin(false); setAdminTab('overview'); }}
-            className="flex items-center gap-2 text-red-600 text-sm font-semibold hover:bg-red-50 px-4 py-2 rounded-lg border border-transparent hover:border-red-100 transition-all"
-          >
-            <LogOut size={18} /> Log Keluar
-          </button>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex gap-2 mb-6 border-b pb-1">
-          <button 
-            onClick={() => setAdminTab('overview')}
-            className={`px-4 py-2 text-sm font-bold rounded-t-lg transition-colors ${adminTab === 'overview' ? 'bg-white text-blue-600 border-t border-l border-r' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            Pengurusan Data
-          </button>
-          <button 
-            onClick={() => setAdminTab('analysis')}
-            className={`px-4 py-2 text-sm font-bold rounded-t-lg transition-colors ${adminTab === 'analysis' ? 'bg-white text-blue-600 border-t border-l border-r' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            Analisa & Laporan
-          </button>
-        </div>
-
-        {/* CONTENT TAB: OVERVIEW (PENGURUSAN) */}
-        {adminTab === 'overview' && (
-          <div className="bg-white rounded-xl shadow-lg p-8 animate-fade-in">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-100 text-blue-700 rounded-lg"><UserCheck size={24}/></div>
-              <h3 className="font-bold text-xl text-gray-800">Pengurusan Data Guru</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <button className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all">
-                <UserCheck size={20} /> 
-                <span className="font-medium">Tambah Guru Baru</span>
-              </button>
-              <button className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-green-500 hover:text-green-600 hover:bg-green-50 transition-all">
-                <Save size={20} /> 
-                <span className="font-medium">Eksport Laporan (Excel)</span>
-              </button>
-            </div>
-            
-            <div className="border-t pt-6">
-              <h4 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <Activity size={18} className="text-red-500"/> Zon Bahaya
-              </h4>
-              <div className="bg-red-50 p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="text-sm text-red-700">
-                  <span className="font-bold">Reset Harian:</span> Tindakan ini akan mengosongkan semua rekod kehadiran hari ini dan menetapkan status guru kepada 'Tidak Hadir'.
-                </div>
-                <button 
-                  onClick={() => {
-                    if(confirm("Adakah anda pasti mahu reset semua kehadiran hari ini kepada 'Tidak Hadir'?")) {
-                      setTeachers(initialTeachers.map(t => ({...t, status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: ''})));
+                setTeachers(prev => prev.map(t => {
+                    if (t.id === selectedTeacherId) {
+                        if (scanMode === 'clock_in') return { ...t, status: 'Hadir', timeIn: timeString, timeOut: '--:--', reason: '' };
+                        else if (scanMode === 'clock_out') return { ...t, timeOut: timeString };
+                        else if (scanMode === 'leave') return { ...t, status: 'Cuti', reason: leaveReason, timeIn: '--:--', timeOut: '--:--' };
+                        else if (scanMode === 'outstation') return { ...t, status: 'Tugas Luar', reason: leaveReason, timeIn: timeString, timeOut: '--:--' };
                     }
-                  }}
-                  className="whitespace-nowrap px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-600 hover:text-white transition-colors"
-                >
-                  Reset Data Hari Ini
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+                    return t;
+                }));
 
-        {/* CONTENT TAB: ANALYSIS (LAPORAN) */}
-        {adminTab === 'analysis' && (
-          <div className="space-y-6 animate-fade-in">
+                setScanMessage(`Berjaya direkodkan pada ${timeString}`);
+                setTimeout(() => {
+                    setScanMessage('');
+                    setLeaveReason('');
+                    setSelectedTeacherId('');
+                    setView('dashboard');
+                }, 2000);
+            };
+
+            const handlePrint = () => {
+                setIsPrinting(true);
+                setTimeout(() => { window.print(); setIsPrinting(false); }, 500);
+            };
+
+            const handleLogin = () => {
+                if (passwordInput === 'admin123') { setIsAdmin(true); setPasswordInput(''); } 
+                else { alert('Kata laluan salah!'); }
+            };
             
-            {/* 1. Analisa Tahunan */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <TrendingUp className="text-blue-600" />
-                <h3 className="font-bold text-lg text-gray-800">Analisa Tahunan (Januari - Disember)</h3>
-              </div>
-              <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={mockYearlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" tick={{fontSize: 12}} />
-                    <YAxis />
-                    <Tooltip contentStyle={{ borderRadius: '8px' }} />
-                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                    <Bar dataKey="hadir" name="Kehadiran Penuh (%)" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="cuti" name="Cuti (%)" fill="#eab308" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="tidakHadir" name="Tidak Hadir (%)" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            // Header Component
+            const Header = () => (
+                <div className="bg-green-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 no-print">
+                    <div className="flex items-center gap-2">
+                        <i className="ph ph-user-check text-3xl"></i>
+                        <div>
+                            <h1 className="text-xl font-bold leading-none">Sistem Guru PASTI</h1>
+                            <p className="text-xs text-green-100 opacity-90">Rekod Kehadiran Pintar</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setView('dashboard')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'dashboard' ? 'bg-white text-green-700' : 'bg-green-700'}`}>Utama</button>
+                        <button onClick={() => setView('scan')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'scan' ? 'bg-white text-green-700' : 'bg-green-700'}`}>Scan QR</button>
+                        <button onClick={() => setView('admin')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'admin' ? 'bg-white text-green-700' : 'bg-green-700'}`}>{isAdmin ? 'Admin' : 'Login'}</button>
+                    </div>
+                </div>
+            );
 
-            {/* 2. Analisa Bulanan (Table) */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-               <div className="flex items-center justify-between mb-4">
-                 <div className="flex items-center gap-2">
-                   <FileText className="text-purple-600" />
-                   <h3 className="font-bold text-lg text-gray-800">Prestasi Bulanan Guru</h3>
-                 </div>
-                 <select className="bg-gray-100 border border-gray-200 text-gray-700 text-sm rounded-lg p-2.5 outline-none">
-                   <option>Januari</option>
-                   <option>Februari</option>
-                   <option>Mac</option>
-                 </select>
-               </div>
-               
-               <div className="overflow-x-auto">
-                 <table className="w-full text-sm text-left text-gray-500">
-                   <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                     <tr>
-                       <th scope="col" className="px-6 py-3">Nama Guru</th>
-                       <th scope="col" className="px-6 py-3 text-center">Kehadiran (%)</th>
-                       <th scope="col" className="px-6 py-3 text-center">Rekod Lewat (Hari)</th>
-                       <th scope="col" className="px-6 py-3 text-center">Gred Prestasi</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {mockMonthlyPerformance.map((item, index) => (
-                       <tr key={index} className="bg-white border-b hover:bg-gray-50">
-                         <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                           {item.name}
-                         </th>
-                         <td className="px-6 py-4 text-center">
-                           <div className="w-full bg-gray-200 rounded-full h-2.5">
-                             <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${item.peratus}%` }}></div>
-                           </div>
-                           <span className="text-xs mt-1 block">{item.peratus}%</span>
-                         </td>
-                         <td className="px-6 py-4 text-center">
-                           <span className={`px-2 py-1 rounded text-xs font-semibold ${item.lewat === 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                             {item.lewat} kali
-                           </span>
-                         </td>
-                         <td className="px-6 py-4 text-center">
-                           <span className="font-bold text-gray-800 bg-gray-100 px-3 py-1 rounded border border-gray-200">
-                             {item.grade}
-                           </span>
-                         </td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-               </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
+            // Dashboard Component
+            const DashboardView = () => {
+                const data = getChartData();
+                const today = new Date();
+                const dateString = today.toLocaleDateString('ms-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
-      <Header />
-      <div className="container mx-auto pb-10 pt-4">
-        {view === 'dashboard' && <DashboardView />}
-        {view === 'scan' && <ScanView />}
-        {view === 'admin' && <AdminView />}
-      </div>
-    </div>
-  );
-}
+                return (
+                    <div className="p-4 space-y-6 max-w-4xl mx-auto animate-fade-in no-print">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            {data.map((item, idx) => (
+                                <div key={idx} className="bg-white p-3 rounded-lg shadow border-l-4" style={{ borderLeftColor: item.fill }}>
+                                    <p className="text-gray-500 text-xs font-semibold uppercase">{item.name}</p>
+                                    <p className="text-2xl font-bold text-gray-800">{item.jumlah}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="bg-white p-4 rounded-lg shadow">
+                            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-2">
+                                <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
+                                    <i className="ph ph-chart-bar text-xl"></i> Statistik Harian
+                                </h3>
+                                <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border">
+                                    <i className="ph ph-calendar text-green-600"></i> <span>{dateString}</span>
+                                </div>
+                            </div>
+                            <div className="h-64 w-full flex items-center justify-center bg-gray-50 rounded">
+                                {isRechartsLoaded ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                            <XAxis type="number" hide />
+                                            <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 12}} />
+                                            <Tooltip cursor={{fill: 'transparent'}} />
+                                            <Bar dataKey="jumlah" radius={[0, 4, 4, 0]} barSize={30}>
+                                                {data.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="text-gray-500 text-sm">Graf sedang dimuatkan atau gagal dimuatkan...</div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-lg shadow overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="font-bold text-gray-700">Senarai Kehadiran Penuh</h3>
+                                <div className="text-xs text-gray-400 italic">Dikemaskini serta-merta</div>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                                        <tr>
+                                            <th className="px-4 py-3">Nama Guru</th>
+                                            <th className="px-4 py-3">Masuk</th>
+                                            <th className="px-4 py-3">Balik</th>
+                                            <th className="px-4 py-3">Status</th>
+                                            <th className="px-4 py-3">Catatan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {teachers.map((t, idx) => {
+                                            let statusColor = "bg-white", badgeColor = "bg-gray-100 text-gray-800";
+                                            if (t.status === 'Tidak Hadir') { statusColor = "bg-red-50"; badgeColor = "bg-red-100 text-red-800"; }
+                                            else if (t.status === 'Cuti') badgeColor = "bg-yellow-100 text-yellow-800";
+                                            else if (t.status === 'Hadir') badgeColor = "bg-green-100 text-green-800";
+                                            else if (t.status === 'Tugas Luar') badgeColor = "bg-purple-100 text-purple-800";
+
+                                            return (
+                                                <tr key={idx} className={`border-b ${statusColor}`}>
+                                                    <td className="px-4 py-3 font-medium">{t.name}</td>
+                                                    <td className="px-4 py-3 font-mono text-gray-600">{t.timeIn}</td>
+                                                    <td className="px-4 py-3 font-mono text-gray-600">{t.timeOut}</td>
+                                                    <td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${badgeColor}`}>{t.status}</span></td>
+                                                    <td className="px-4 py-3 text-gray-500 italic truncate max-w-xs">{t.reason || '-'}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const ScanView = () => (
+                <div className="p-4 md:p-8 max-w-6xl mx-auto">
+                    <div className={`bg-white rounded-xl shadow-lg p-6 md:p-10 text-center space-y-8 no-print ${isPrinting ? 'hidden' : ''}`}>
+                        {!scanMode ? (
+                            <>
+                                <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-6">
+                                    <div className="text-left">
+                                        <h2 className="text-3xl font-bold text-gray-800">Sila Imbas QR</h2>
+                                        <p className="text-gray-500">Pilih kod QR yang sesuai untuk aktiviti anda</p>
+                                    </div>
+                                    <button onClick={handlePrint} className="flex items-center gap-2 bg-gray-800 text-white px-5 py-3 rounded-lg shadow hover:bg-gray-900 transition-all">
+                                        <i className="ph ph-printer text-xl"></i> Cetak Kod QR
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+                                    <div onClick={() => setScanMode('clock_in')} className="cursor-pointer bg-white border-2 border-blue-100 rounded-2xl p-6 hover:shadow-2xl hover:border-blue-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_IN&color=1d4ed8" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-blue-900 mb-2">QR MASUK</h3>
+                                        <div className="flex items-center justify-center gap-2 text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-sign-in"></i> Datang</div>
+                                    </div>
+                                    <div onClick={() => setScanMode('clock_out')} className="cursor-pointer bg-white border-2 border-rose-100 rounded-2xl p-6 hover:shadow-2xl hover:border-rose-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_OUT&color=be123c" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-rose-900 mb-2">QR BALIK</h3>
+                                        <div className="flex items-center justify-center gap-2 text-rose-600 bg-rose-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-sign-out"></i> Pulang</div>
+                                    </div>
+                                    <div onClick={() => setScanMode('outstation')} className="cursor-pointer bg-white border-2 border-purple-100 rounded-2xl p-6 hover:shadow-2xl hover:border-purple-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_OUTSTATION&color=7e22ce" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-purple-900 mb-2">TUGAS LUAR</h3>
+                                        <div className="flex items-center justify-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-briefcase"></i> Kursus</div>
+                                    </div>
+                                    <div onClick={() => setScanMode('leave')} className="cursor-pointer bg-white border-2 border-orange-100 rounded-2xl p-6 hover:shadow-2xl hover:border-orange-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_LEAVE&color=c2410c" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-orange-900 mb-2">CUTI / MC</h3>
+                                        <div className="flex items-center justify-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-calendar-x"></i> Cuti</div>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="max-w-md mx-auto text-left animate-fade-in py-8">
+                                <div className="flex items-center gap-3 mb-6 pb-4 border-b">
+                                    <div className="p-3 bg-gray-100 rounded-full"><i className="ph ph-scan text-2xl text-gray-600"></i></div>
+                                    <div>
+                                        <h3 className="font-bold text-xl text-gray-800">Mod Imbasan Aktif</h3>
+                                        <button onClick={() => { setScanMode(null); setScanMessage(''); }} className="text-sm text-gray-500 underline">Kembali</button>
+                                    </div>
+                                </div>
+                                <div className="space-y-4 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                                    <label className="block text-sm font-bold text-gray-700">Simulasi: Pilih ID Guru</label>
+                                    <select className="w-full p-3 border rounded-lg bg-white" value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(e.target.value)}>
+                                        <option value="">-- Sila Scan/Pilih ID --</option>
+                                        {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.id})</option>)}
+                                    </select>
+                                    {(scanMode === 'leave' || scanMode === 'outstation') && (
+                                        <textarea className="w-full p-3 border rounded-lg" rows="3" placeholder="Nyatakan sebab/lokasi..." value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)}></textarea>
+                                    )}
+                                    <button onClick={handleAttendanceSubmit} disabled={!selectedTeacherId} className={`w-full py-3 rounded-lg font-bold text-white ${selectedTeacherId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300'}`}>{scanMessage ? 'Disimpan!' : 'Sahkan & Hantar'}</button>
+                                    {scanMessage && <div className="p-3 bg-green-100 text-green-700 rounded-lg text-center font-bold mt-2">{scanMessage}</div>}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* PRINT LAYOUT */}
+                    <div className={`print-only ${isPrinting ? 'block' : 'hidden'} bg-white p-8 w-full`}>
+                        <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
+                            <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN PASTI</h1>
+                        </div>
+                        <div className="grid grid-cols-2 gap-8 text-center">
+                            <div className="border-4 border-blue-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-blue-800 mb-2">QR MASUK</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_CLOCK_IN" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">REKOD DATANG</p>
+                            </div>
+                            <div className="border-4 border-rose-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-rose-800 mb-2">QR BALIK</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_CLOCK_OUT" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">REKOD PULANG</p>
+                            </div>
+                             <div className="border-4 border-purple-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-purple-800 mb-2">TUGAS LUAR</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_OUTSTATION" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">KURSUS</p>
+                            </div>
+                            <div className="border-4 border-orange-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-orange-800 mb-2">CUTI / MC</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_LEAVE" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">TIDAK HADIR</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const AdminView = () => {
+                if (!isAdmin) return (
+                    <div className="flex flex-col items-center justify-center min-h-[50vh] p-4 no-print">
+                        <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-sm text-center border-t-4 border-gray-800">
+                            <i className="ph ph-lock-key text-4xl text-gray-700 mb-4"></i>
+                            <h2 className="text-2xl font-bold mb-2">Akses Pentadbir</h2>
+                            <input type="password" placeholder="Kata Laluan" className="w-full p-3 border rounded-lg mb-4 text-center" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />
+                            <button onClick={handleLogin} className="w-full bg-gray-800 text-white py-3 rounded-lg font-bold">Log Masuk</button>
+                            <div className="mt-4 text-xs text-gray-400">Hint: admin123</div>
+                        </div>
+                    </div>
+                );
+
+                return (
+                    <div className="p-4 max-w-5xl mx-auto no-print">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold">Panel Pentadbir</h2>
+                            <button onClick={() => { setIsAdmin(false); setAdminTab('overview'); }} className="text-red-600 font-bold text-sm border px-3 py-1 rounded hover:bg-red-50">Log Keluar</button>
+                        </div>
+                        <div className="flex gap-2 mb-6 border-b">
+                            <button onClick={() => setAdminTab('overview')} className={`px-4 py-2 font-bold rounded-t-lg ${adminTab === 'overview' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Pengurusan</button>
+                            <button onClick={() => setAdminTab('analysis')} className={`px-4 py-2 font-bold rounded-t-lg ${adminTab === 'analysis' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Analisa</button>
+                        </div>
+                        {adminTab === 'overview' && (
+                            <div className="bg-white rounded-xl shadow-lg p-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                                    <button className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-500 hover:text-blue-600"><i className="ph ph-user-plus text-xl"></i> Tambah Guru</button>
+                                    <button className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-green-500 hover:text-green-600"><i className="ph ph-file-csv text-xl"></i> Eksport Excel</button>
+                                </div>
+                                <div className="border-t pt-6 bg-red-50 p-4 rounded-lg flex justify-between items-center">
+                                    <span className="text-red-700 font-bold">Reset Harian</span>
+                                    <button onClick={() => { if(confirm("Reset semua data?")) setTeachers(initialTeachers.map(t => ({...t, status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: ''}))); }} className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded font-bold">Reset Sekarang</button>
+                                </div>
+                            </div>
+                        )}
+                        {adminTab === 'analysis' && (
+                            <div className="space-y-6">
+                                <div className="bg-white rounded-xl shadow-lg p-6 h-80">
+                                    <h3 className="font-bold mb-4">Analisa Tahunan</h3>
+                                    {isRechartsLoaded ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={mockYearlyData}><XAxis dataKey="name" /><Tooltip /><Legend /><Bar dataKey="hadir" fill="#22c55e" /><Bar dataKey="cuti" fill="#eab308" /><Bar dataKey="tidakHadir" fill="#ef4444" /></BarChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="flex h-full items-center justify-center text-gray-500">Graf tidak dapat dipaparkan</div>
+                                    )}
+                                </div>
+                                <div className="bg-white rounded-xl shadow-lg p-6">
+                                    <h3 className="font-bold mb-4">Prestasi Bulanan</h3>
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="text-xs uppercase bg-gray-50"><tr><th className="px-6 py-3">Nama</th><th className="px-6 py-3">Kehadiran</th><th className="px-6 py-3">Gred</th></tr></thead>
+                                        <tbody>{mockMonthlyPerformance.map((m, i) => <tr key={i} className="border-b"><td className="px-6 py-4">{m.name}</td><td className="px-6 py-4">{m.peratus}%</td><td className="px-6 py-4 font-bold">{m.grade}</td></tr>)}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen">
+                    <Header />
+                    <div className="container mx-auto pb-10 pt-4">
+                        {view === 'dashboard' && <DashboardView />}
+                        {view === 'scan' && <ScanView />}
+                        {view === 'admin' && <AdminView />}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
