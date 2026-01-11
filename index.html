@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Kehadiran Guru PASTI</title>
+    <title>Sistem Kehadiran Guru PASTI AL-HUDA</title>
     
     <!-- 1. TAILWIND CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -49,17 +49,19 @@
         const { useState, useEffect } = React;
         
         // --- SAFE RECHARTS ACCESS ---
-        // Kita ambil objek dari window.Recharts. Jika tiada, guna objek kosong untuk elak crash.
         const RechartsObj = window.Recharts || {};
         const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } = RechartsObj;
 
+        // --- CONSTANTS ---
+        const BRANCHES = ['PAH1', 'PAH2', 'PAH3', 'PAH5'];
+
         // --- MOCK DATA ---
         const initialTeachers = [
-            { id: 'G01', name: 'Cikgu Aishah', status: 'Hadir', timeIn: '07:30', timeOut: '13:00', reason: '' },
-            { id: 'G02', name: 'Cikgu Fatimah', status: 'Hadir', timeIn: '07:45', timeOut: '--:--', reason: '' },
-            { id: 'G03', name: 'Cikgu Rahman', status: 'Cuti', timeIn: '--:--', timeOut: '--:--', reason: 'Demam panas' },
-            { id: 'G04', name: 'Cikgu Zulkifli', status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: '' },
-            { id: 'G05', name: 'Cikgu Hawa', status: 'Tugas Luar', timeIn: '08:00', timeOut: '--:--', reason: 'Mesyuarat Kawasan' },
+            { id: 'G01', name: 'Cikgu Aishah', branch: 'PAH1', status: 'Hadir', timeIn: '07:30', timeOut: '13:00', reason: '' },
+            { id: 'G02', name: 'Cikgu Fatimah', branch: 'PAH2', status: 'Hadir', timeIn: '07:45', timeOut: '--:--', reason: '' },
+            { id: 'G03', name: 'Cikgu Rahman', branch: 'PAH1', status: 'Cuti', timeIn: '--:--', timeOut: '--:--', reason: 'Demam panas' },
+            { id: 'G04', name: 'Cikgu Zulkifli', branch: 'PAH3', status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: '' },
+            { id: 'G05', name: 'Cikgu Hawa', branch: 'PAH5', status: 'Tugas Luar', timeIn: '08:00', timeOut: '--:--', reason: 'Mesyuarat Kawasan' },
         ];
 
         const mockYearlyData = [
@@ -96,6 +98,10 @@
             const [leaveReason, setLeaveReason] = useState('');
             const [scanMessage, setScanMessage] = useState('');
             const [isPrinting, setIsPrinting] = useState(false);
+
+            // State untuk tambah guru baru
+            const [newTeacherName, setNewTeacherName] = useState('');
+            const [newTeacherBranch, setNewTeacherBranch] = useState('PAH1');
 
             // Periksa jika Recharts berjaya dimuatkan
             const isRechartsLoaded = !!window.Recharts;
@@ -148,8 +154,35 @@
             };
 
             const handleLogin = () => {
-                if (passwordInput === 'admin123') { setIsAdmin(true); setPasswordInput(''); } 
+                if (passwordInput === 'admin321') { setIsAdmin(true); setPasswordInput(''); } 
                 else { alert('Kata laluan salah!'); }
+            };
+
+            // --- FUNGSI ADMIN: URUS GURU ---
+            const handleAddTeacher = () => {
+                if (!newTeacherName.trim()) {
+                    alert("Sila masukkan nama guru.");
+                    return;
+                }
+                const newId = `G${String(teachers.length + 1).padStart(2, '0')}${Math.floor(Math.random() * 10)}`; // Simple random ID
+                const newTeacher = {
+                    id: newId,
+                    name: newTeacherName,
+                    branch: newTeacherBranch,
+                    status: 'Tidak Hadir',
+                    timeIn: '--:--',
+                    timeOut: '--:--',
+                    reason: ''
+                };
+                setTeachers([...teachers, newTeacher]);
+                setNewTeacherName('');
+                alert(`Guru ${newTeacherName} berjaya ditambah ke ${newTeacherBranch}!`);
+            };
+
+            const handleDeleteTeacher = (id) => {
+                if (confirm("Adakah anda pasti mahu memadam guru ini? Data tidak boleh dikembalikan.")) {
+                    setTeachers(teachers.filter(t => t.id !== id));
+                }
             };
             
             // Header Component
@@ -158,8 +191,8 @@
                     <div className="flex items-center gap-2">
                         <i className="ph ph-user-check text-3xl"></i>
                         <div>
-                            <h1 className="text-xl font-bold leading-none">Sistem Guru PASTI</h1>
-                            <p className="text-xs text-green-100 opacity-90">Rekod Kehadiran Pintar</p>
+                            <h1 className="text-xl font-bold leading-none">Sistem Guru PASTI AL-HUDA</h1>
+                            <p className="text-xs text-green-100 opacity-90">Rekod Kehadiran Pintar (PAH1, PAH2, PAH3, PAH5)</p>
                         </div>
                     </div>
                     <div className="flex gap-2">
@@ -177,7 +210,7 @@
                 const dateString = today.toLocaleDateString('ms-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
                 return (
-                    <div className="p-4 space-y-6 max-w-4xl mx-auto animate-fade-in no-print">
+                    <div className="p-4 space-y-6 max-w-5xl mx-auto animate-fade-in no-print">
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             {data.map((item, idx) => (
                                 <div key={idx} className="bg-white p-3 rounded-lg shadow border-l-4" style={{ borderLeftColor: item.fill }}>
@@ -225,6 +258,7 @@
                                     <thead className="text-xs text-gray-700 uppercase bg-gray-100">
                                         <tr>
                                             <th className="px-4 py-3">Nama Guru</th>
+                                            <th className="px-4 py-3">Cawangan</th>
                                             <th className="px-4 py-3">Masuk</th>
                                             <th className="px-4 py-3">Balik</th>
                                             <th className="px-4 py-3">Status</th>
@@ -242,6 +276,7 @@
                                             return (
                                                 <tr key={idx} className={`border-b ${statusColor}`}>
                                                     <td className="px-4 py-3 font-medium">{t.name}</td>
+                                                    <td className="px-4 py-3"><span className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">{t.branch}</span></td>
                                                     <td className="px-4 py-3 font-mono text-gray-600">{t.timeIn}</td>
                                                     <td className="px-4 py-3 font-mono text-gray-600">{t.timeOut}</td>
                                                     <td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${badgeColor}`}>{t.status}</span></td>
@@ -307,7 +342,7 @@
                                     <label className="block text-sm font-bold text-gray-700">Simulasi: Pilih ID Guru</label>
                                     <select className="w-full p-3 border rounded-lg bg-white" value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(e.target.value)}>
                                         <option value="">-- Sila Scan/Pilih ID --</option>
-                                        {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.id})</option>)}
+                                        {teachers.map(t => <option key={t.id} value={t.id}>{t.name} - {t.branch}</option>)}
                                     </select>
                                     {(scanMode === 'leave' || scanMode === 'outstation') && (
                                         <textarea className="w-full p-3 border rounded-lg" rows="3" placeholder="Nyatakan sebab/lokasi..." value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)}></textarea>
@@ -322,7 +357,8 @@
                     {/* PRINT LAYOUT */}
                     <div className={`print-only ${isPrinting ? 'block' : 'hidden'} bg-white p-8 w-full`}>
                         <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
-                            <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN PASTI</h1>
+                            <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN PASTI AL-HUDA</h1>
+                            <p className="text-xl text-gray-600">PAH1 | PAH2 | PAH3 | PAH5</p>
                         </div>
                         <div className="grid grid-cols-2 gap-8 text-center">
                             <div className="border-4 border-blue-600 rounded-2xl p-6 flex flex-col items-center">
@@ -356,6 +392,7 @@
                         <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-sm text-center border-t-4 border-gray-800">
                             <i className="ph ph-lock-key text-4xl text-gray-700 mb-4"></i>
                             <h2 className="text-2xl font-bold mb-2">Akses Pentadbir</h2>
+                            <p className="text-gray-500 mb-4 text-sm">Pasti Al-Huda</p>
                             <input type="password" placeholder="Kata Laluan" className="w-full p-3 border rounded-lg mb-4 text-center" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />
                             <button onClick={handleLogin} className="w-full bg-gray-800 text-white py-3 rounded-lg font-bold">Log Masuk</button>
                             <div className="mt-4 text-xs text-gray-400">Hint: admin123</div>
@@ -369,22 +406,93 @@
                             <h2 className="text-2xl font-bold">Panel Pentadbir</h2>
                             <button onClick={() => { setIsAdmin(false); setAdminTab('overview'); }} className="text-red-600 font-bold text-sm border px-3 py-1 rounded hover:bg-red-50">Log Keluar</button>
                         </div>
-                        <div className="flex gap-2 mb-6 border-b">
-                            <button onClick={() => setAdminTab('overview')} className={`px-4 py-2 font-bold rounded-t-lg ${adminTab === 'overview' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Pengurusan</button>
-                            <button onClick={() => setAdminTab('analysis')} className={`px-4 py-2 font-bold rounded-t-lg ${adminTab === 'analysis' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Analisa</button>
+                        <div className="flex gap-2 mb-6 border-b overflow-x-auto">
+                            <button onClick={() => setAdminTab('overview')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'overview' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Pengurusan</button>
+                            <button onClick={() => setAdminTab('teachers')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'teachers' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Senarai Guru</button>
+                            <button onClick={() => setAdminTab('analysis')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'analysis' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Analisa</button>
                         </div>
+
+                        {/* TAB 1: PENGURUSAN UMUM */}
                         {adminTab === 'overview' && (
                             <div className="bg-white rounded-xl shadow-lg p-8">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                                    <button className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-500 hover:text-blue-600"><i className="ph ph-user-plus text-xl"></i> Tambah Guru</button>
+                                    <button onClick={() => setAdminTab('teachers')} className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-500 hover:text-blue-600"><i className="ph ph-users text-xl"></i> Urus Senarai Guru</button>
                                     <button className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-green-500 hover:text-green-600"><i className="ph ph-file-csv text-xl"></i> Eksport Excel</button>
                                 </div>
                                 <div className="border-t pt-6 bg-red-50 p-4 rounded-lg flex justify-between items-center">
                                     <span className="text-red-700 font-bold">Reset Harian</span>
-                                    <button onClick={() => { if(confirm("Reset semua data?")) setTeachers(initialTeachers.map(t => ({...t, status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: ''}))); }} className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded font-bold">Reset Sekarang</button>
+                                    <button onClick={() => { if(confirm("Reset semua data kehadiran hari ini?")) setTeachers(teachers.map(t => ({...t, status: 'Tidak Hadir', timeIn: '--:--', timeOut: '--:--', reason: ''}))); }} className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded font-bold">Reset Sekarang</button>
                                 </div>
                             </div>
                         )}
+
+                        {/* TAB 2: PENGURUSAN GURU (BARU) */}
+                        {adminTab === 'teachers' && (
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><i className="ph ph-user-plus text-blue-600"></i> Tambah Guru Baru</h3>
+                                <div className="flex flex-col md:flex-row gap-4 mb-8 p-4 bg-blue-50 rounded-lg">
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-bold text-blue-800 mb-1">Nama Penuh</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full p-2 border rounded" 
+                                            placeholder="Cth: Cikgu Ali" 
+                                            value={newTeacherName}
+                                            onChange={(e) => setNewTeacherName(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="w-full md:w-48">
+                                        <label className="block text-sm font-bold text-blue-800 mb-1">Cawangan</label>
+                                        <select 
+                                            className="w-full p-2 border rounded"
+                                            value={newTeacherBranch}
+                                            onChange={(e) => setNewTeacherBranch(e.target.value)}
+                                        >
+                                            {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="flex items-end">
+                                        <button onClick={handleAddTeacher} className="w-full md:w-auto px-6 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700">Tambah</button>
+                                    </div>
+                                </div>
+
+                                <h3 className="font-bold text-lg mb-4">Senarai Guru Sedia Ada</h3>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left border">
+                                        <thead className="bg-gray-100 uppercase text-xs">
+                                            <tr>
+                                                <th className="px-4 py-3">ID</th>
+                                                <th className="px-4 py-3">Nama Guru</th>
+                                                <th className="px-4 py-3">Cawangan</th>
+                                                <th className="px-4 py-3 text-center">Tindakan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {teachers.map((t) => (
+                                                <tr key={t.id} className="border-b hover:bg-gray-50">
+                                                    <td className="px-4 py-3 font-mono text-gray-500">{t.id}</td>
+                                                    <td className="px-4 py-3 font-bold">{t.name}</td>
+                                                    <td className="px-4 py-3"><span className="px-2 py-1 bg-gray-200 rounded text-xs">{t.branch}</span></td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <button 
+                                                            onClick={() => handleDeleteTeacher(t.id)}
+                                                            className="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-xs font-bold"
+                                                        >
+                                                            Padam
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {teachers.length === 0 && (
+                                                <tr><td colSpan="4" className="text-center py-4 text-gray-500">Tiada guru didaftarkan.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 3: ANALISA */}
                         {adminTab === 'analysis' && (
                             <div className="space-y-6">
                                 <div className="bg-white rounded-xl shadow-lg p-6 h-80">
