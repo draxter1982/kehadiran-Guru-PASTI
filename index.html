@@ -86,14 +86,11 @@
 
         // --- HELPER UNTUK MENJANA DATA LAPORAN (MOCK) ---
         const generateReportData = (month, branchFilter, teacherFilter, teachersList) => {
-            // Ini hanya simulasi data sejarah kerana kita tiada database sebenar
-            const daysInMonth = 20; // Anggap 20 hari persekolahan
+            const daysInMonth = 20; 
             let reportData = [];
 
             teachersList.forEach(teacher => {
-                // Tapis ikut cawangan jika dipilih
                 if (branchFilter !== 'Semua' && teacher.branch !== branchFilter) return;
-                // Tapis ikut nama guru jika dipilih
                 if (teacherFilter !== 'Semua' && teacher.name !== teacherFilter) return;
 
                 for (let i = 1; i <= daysInMonth; i++) {
@@ -421,7 +418,8 @@
             newTeacherBranch, setNewTeacherBranch, 
             handleAddTeacher, handleDeleteTeacher,
             schoolName, setSchoolName,
-            logoUrl, setLogoUrl
+            logoUrl, setLogoUrl,
+            handleSaveData
         }) => {
             if (!isAdmin) return <div className="p-8 text-center text-red-600">Akses Ditolak</div>;
 
@@ -493,7 +491,16 @@
                                 </div>
                             </div>
 
-                            <h3 className="font-bold text-lg mb-4">Senarai Guru Sedia Ada</h3>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold text-lg">Senarai Guru Sedia Ada</h3>
+                                <button 
+                                    onClick={handleSaveData}
+                                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow hover:bg-green-700 transition-all"
+                                >
+                                    <i className="ph ph-floppy-disk text-xl"></i> SIMPAN PERUBAHAN
+                                </button>
+                            </div>
+                            
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left border">
                                     <thead className="bg-gray-100 uppercase text-xs">
@@ -526,6 +533,7 @@
                                     </tbody>
                                 </table>
                             </div>
+                            <p className="text-xs text-gray-500 mt-4 italic">* Sila tekan butang "SIMPAN PERUBAHAN" selepas menambah atau memadam guru untuk memastikan data disimpan secara kekal dalam pelayar ini.</p>
                         </div>
                     )}
 
@@ -698,6 +706,15 @@
                                         <p className="text-sm text-blue-700">Ini adalah bagaimana logo akan kelihatan pada aplikasi.</p>
                                     </div>
                                 </div>
+
+                                <div className="pt-4 border-t">
+                                    <button 
+                                        onClick={handleSaveData}
+                                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white font-bold rounded-lg shadow hover:bg-green-700 transition-all"
+                                    >
+                                        <i className="ph ph-floppy-disk text-xl"></i> SIMPAN TETAPAN
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -713,8 +730,21 @@
             const [userRole, setUserRole] = useState(null); // 'guru' | 'admin'
 
             // --- APP STATES ---
+            // INITIALIZE FROM LOCAL STORAGE
+            const [teachers, setTeachers] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('pasti_teachers');
+                    return saved ? JSON.parse(saved) : initialTeachers;
+                } catch (e) {
+                    return initialTeachers;
+                }
+            });
+            
+            // State untuk Tetapan Sekolah (Persist)
+            const [schoolName, setSchoolName] = useState(() => localStorage.getItem('pasti_schoolName') || 'PASTI AL-HUDA');
+            const [logoUrl, setLogoUrl] = useState(() => localStorage.getItem('pasti_logoUrl') || '');
+
             const [view, setView] = useState('dashboard');
-            const [teachers, setTeachers] = useState(initialTeachers);
             const [adminTab, setAdminTab] = useState('overview');
             const [scanMode, setScanMode] = useState(null); 
             const [selectedTeacherId, setSelectedTeacherId] = useState('');
@@ -726,10 +756,6 @@
             const [newTeacherName, setNewTeacherName] = useState('');
             const [newTeacherBranch, setNewTeacherBranch] = useState('PAH1');
             
-            // State untuk Tetapan Sekolah
-            const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
-            const [logoUrl, setLogoUrl] = useState(''); // Default kosong (guna ikon)
-
             const isAdmin = userRole === 'admin';
 
             // --- LOGIC: DATA & ACTIONS ---
@@ -780,13 +806,21 @@
                 };
                 setTeachers([...teachers, newTeacher]);
                 setNewTeacherName('');
-                alert(`Guru ${newTeacherName} berjaya ditambah ke ${newTeacherBranch}!`);
+                alert(`Guru ${newTeacherName} berjaya ditambah ke ${newTeacherBranch}! Sila tekan SIMPAN.`);
             };
 
             const handleDeleteTeacher = (id) => {
                 if (confirm("Adakah anda pasti mahu memadam guru ini? Data tidak boleh dikembalikan.")) {
                     setTeachers(teachers.filter(t => t.id !== id));
                 }
+            };
+
+            // FUNGSI SIMPAN KE LOCAL STORAGE
+            const handleSaveData = () => {
+                localStorage.setItem('pasti_teachers', JSON.stringify(teachers));
+                localStorage.setItem('pasti_schoolName', schoolName);
+                localStorage.setItem('pasti_logoUrl', logoUrl);
+                alert('Data sistem berjaya disimpan ke dalam pelayar ini!');
             };
             
             const handleLogout = () => {
@@ -862,6 +896,7 @@
                                 setSchoolName={setSchoolName}
                                 logoUrl={logoUrl}
                                 setLogoUrl={setLogoUrl}
+                                handleSaveData={handleSaveData}
                             />
                         )}
                     </div>
