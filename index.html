@@ -42,7 +42,7 @@
 
     <script type="text/babel">
         // --- REACT HOOKS SETUP (PENTING) ---
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         // --- SAFE RECHARTS ACCESS ---
         const RechartsObj = window.Recharts || {};
@@ -51,6 +51,7 @@
 
         // --- CONSTANTS & MOCK DATA ---
         const BRANCHES = ['PAH1', 'PAH2', 'PAH3', 'PAH5'];
+        const MONTHS = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
 
         const initialTeachers = [
             { id: 'G01', name: 'Cikgu Aishah', branch: 'PAH1', status: 'Hadir', timeIn: '07:30', timeOut: '13:00', reason: '' },
@@ -83,14 +84,52 @@
             { name: 'Cikgu Hawa', peratus: 100, lewat: 0, grade: 'A+' },
         ];
 
+        // --- HELPER UNTUK MENJANA DATA LAPORAN (MOCK) ---
+        const generateReportData = (month, branchFilter, teacherFilter, teachersList) => {
+            // Ini hanya simulasi data sejarah kerana kita tiada database sebenar
+            const daysInMonth = 20; // Anggap 20 hari persekolahan
+            let reportData = [];
+
+            teachersList.forEach(teacher => {
+                // Tapis ikut cawangan jika dipilih
+                if (branchFilter !== 'Semua' && teacher.branch !== branchFilter) return;
+                // Tapis ikut nama guru jika dipilih
+                if (teacherFilter !== 'Semua' && teacher.name !== teacherFilter) return;
+
+                for (let i = 1; i <= daysInMonth; i++) {
+                    const statusRandom = Math.random();
+                    let status = 'Hadir';
+                    let timeIn = `07:${Math.floor(Math.random() * 59).toString().padStart(2, '0')}`;
+                    let timeOut = `13:${Math.floor(Math.random() * 30).toString().padStart(2, '0')}`;
+                    
+                    if (statusRandom > 0.9) { status = 'Cuti'; timeIn = '--:--'; timeOut = '--:--'; }
+                    else if (statusRandom > 0.95) { status = 'Tidak Hadir'; timeIn = '--:--'; timeOut = '--:--'; }
+
+                    reportData.push({
+                        date: `${i} ${month} 2026`,
+                        name: teacher.name,
+                        branch: teacher.branch,
+                        status: status,
+                        timeIn: timeIn,
+                        timeOut: timeOut
+                    });
+                }
+            });
+            return reportData;
+        };
+
         // --- SUB-COMPONENTS ---
 
-        const Header = ({ userRole, view, setView, isAdmin, onLogout }) => (
+        const Header = ({ userRole, view, setView, isAdmin, onLogout, schoolName, logoUrl }) => (
             <div className="bg-green-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 no-print">
-                <div className="flex items-center gap-2">
-                    <i className="ph ph-user-check text-3xl"></i>
+                <div className="flex items-center gap-3">
+                    {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded-full bg-white p-1" />
+                    ) : (
+                        <i className="ph ph-user-check text-3xl"></i>
+                    )}
                     <div>
-                        <h1 className="text-xl font-bold leading-none">PASTI AL-HUDA</h1>
+                        <h1 className="text-xl font-bold leading-none uppercase">{schoolName}</h1>
                         <p className="text-xs text-green-100 opacity-90">{userRole === 'admin' ? 'Mod Pentadbir' : 'Mod Guru'}</p>
                     </div>
                 </div>
@@ -111,7 +150,7 @@
             </div>
         );
 
-        const LoginScreen = ({ onLogin }) => {
+        const LoginScreen = ({ onLogin, schoolName, logoUrl }) => {
             const [showPass, setShowPass] = useState(false);
             const [pass, setPass] = useState('');
 
@@ -130,10 +169,14 @@
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
                         <div className="bg-green-600 p-8 text-center">
                             <div className="inline-block p-4 bg-white rounded-full text-green-600 mb-4 shadow-lg">
-                                <i className="ph ph-user-circle text-5xl"></i>
+                                {logoUrl ? (
+                                    <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain" />
+                                ) : (
+                                    <i className="ph ph-user-circle text-5xl"></i>
+                                )}
                             </div>
                             <h1 className="text-2xl font-bold text-white">Sistem Kehadiran</h1>
-                            <p className="text-green-100 opacity-90">PASTI AL-HUDA</p>
+                            <p className="text-green-100 opacity-90 uppercase">{schoolName}</p>
                         </div>
                         
                         <div className="p-8 space-y-6">
@@ -171,7 +214,7 @@
             );
         };
 
-        const DashboardView = ({ teachers }) => {
+        const DashboardView = ({ teachers, schoolName }) => {
             const getChartData = () => {
                 const stats = { Hadir: 0, 'Dalam Proses': 0, Cuti: 0, 'Tugas Luar': 0, 'Tidak Hadir': 0 };
                 teachers.forEach(t => {
@@ -277,7 +320,7 @@
             );
         };
 
-        const ScanView = ({ scanMode, setScanMode, teachers, selectedTeacherId, setSelectedTeacherId, leaveReason, setLeaveReason, scanMessage, handleAttendanceSubmit, handlePrint, isPrinting }) => (
+        const ScanView = ({ scanMode, setScanMode, teachers, selectedTeacherId, setSelectedTeacherId, leaveReason, setLeaveReason, scanMessage, handleAttendanceSubmit, handlePrint, isPrinting, schoolName }) => (
             <div className="p-4 md:p-8 max-w-6xl mx-auto">
                 <div className={`bg-white rounded-xl shadow-lg p-6 md:p-10 text-center space-y-8 no-print ${isPrinting ? 'hidden' : ''}`}>
                     {!scanMode ? (
@@ -342,7 +385,7 @@
                 {/* PRINT LAYOUT */}
                 <div className={`print-only ${isPrinting ? 'block' : 'hidden'} bg-white p-8 w-full`}>
                     <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
-                        <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN PASTI AL-HUDA</h1>
+                        <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN {schoolName}</h1>
                         <p className="text-xl text-gray-600">PAH1 | PAH2 | PAH3 | PAH5</p>
                     </div>
                     <div className="grid grid-cols-2 gap-8 text-center">
@@ -376,9 +419,21 @@
             teachers, setTeachers, 
             newTeacherName, setNewTeacherName, 
             newTeacherBranch, setNewTeacherBranch, 
-            handleAddTeacher, handleDeleteTeacher 
+            handleAddTeacher, handleDeleteTeacher,
+            schoolName, setSchoolName,
+            logoUrl, setLogoUrl
         }) => {
             if (!isAdmin) return <div className="p-8 text-center text-red-600">Akses Ditolak</div>;
+
+            // State untuk Laporan Bulanan
+            const [selectedMonth, setSelectedMonth] = useState('Januari');
+            const [selectedBranchFilter, setSelectedBranchFilter] = useState('Semua');
+            const [selectedTeacherFilter, setSelectedTeacherFilter] = useState('Semua');
+
+            // Generate report data on the fly (mocking)
+            const reportData = React.useMemo(() => {
+                return generateReportData(selectedMonth, selectedBranchFilter, selectedTeacherFilter, teachers);
+            }, [selectedMonth, selectedBranchFilter, selectedTeacherFilter, teachers]);
 
             return (
                 <div className="p-4 max-w-5xl mx-auto no-print">
@@ -386,15 +441,17 @@
                         <h2 className="text-2xl font-bold">Panel Pentadbir</h2>
                         <p className="text-gray-500 text-sm">Pengurusan Data Sekolah</p>
                     </div>
-                    <div className="flex gap-2 mb-6 border-b overflow-x-auto">
-                        <button onClick={() => setAdminTab('overview')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'overview' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Pengurusan</button>
-                        <button onClick={() => setAdminTab('teachers')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'teachers' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Senarai Guru</button>
-                        <button onClick={() => setAdminTab('analysis')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'analysis' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500'}`}>Analisa</button>
+                    <div className="flex gap-2 mb-6 border-b overflow-x-auto pb-2">
+                        <button onClick={() => setAdminTab('overview')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'overview' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500 hover:bg-gray-50'}`}>Pengurusan</button>
+                        <button onClick={() => setAdminTab('teachers')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'teachers' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500 hover:bg-gray-50'}`}>Senarai Guru</button>
+                        <button onClick={() => setAdminTab('report')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'report' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500 hover:bg-gray-50'}`}>Laporan Bulanan</button>
+                        <button onClick={() => setAdminTab('analysis')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'analysis' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500 hover:bg-gray-50'}`}>Analisa</button>
+                        <button onClick={() => setAdminTab('settings')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'settings' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500 hover:bg-gray-50'}`}>Tetapan</button>
                     </div>
 
                     {/* TAB 1: PENGURUSAN UMUM */}
                     {adminTab === 'overview' && (
-                        <div className="bg-white rounded-xl shadow-lg p-8">
+                        <div className="bg-white rounded-xl shadow-lg p-8 animate-fade-in">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                                 <button onClick={() => setAdminTab('teachers')} className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-blue-500 hover:text-blue-600"><i className="ph ph-users text-xl"></i> Urus Senarai Guru</button>
                                 <button className="flex items-center justify-center gap-2 px-4 py-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 rounded-xl hover:border-green-500 hover:text-green-600"><i className="ph ph-file-csv text-xl"></i> Eksport Excel</button>
@@ -408,7 +465,7 @@
 
                     {/* TAB 2: PENGURUSAN GURU */}
                     {adminTab === 'teachers' && (
-                        <div className="bg-white rounded-xl shadow-lg p-6">
+                        <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
                             <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><i className="ph ph-user-plus text-blue-600"></i> Tambah Guru Baru</h3>
                             <div className="flex flex-col md:flex-row gap-4 mb-8 p-4 bg-blue-50 rounded-lg">
                                 <div className="flex-1">
@@ -472,9 +529,110 @@
                         </div>
                     )}
 
+                    {/* TAB BARU: LAPORAN BULANAN */}
+                    {adminTab === 'report' && (
+                        <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
+                            <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-purple-700">
+                                <i className="ph ph-file-text text-xl"></i> Rekod Kehadiran Bulanan
+                            </h3>
+
+                            {/* Filters */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-purple-50 p-4 rounded-lg">
+                                <div>
+                                    <label className="block text-xs font-bold text-purple-800 uppercase mb-1">Bulan</label>
+                                    <select 
+                                        className="w-full p-2 border border-purple-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        value={selectedMonth}
+                                        onChange={(e) => setSelectedMonth(e.target.value)}
+                                    >
+                                        {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-purple-800 uppercase mb-1">Cawangan</label>
+                                    <select 
+                                        className="w-full p-2 border border-purple-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        value={selectedBranchFilter}
+                                        onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                                    >
+                                        <option value="Semua">Semua Cawangan</option>
+                                        {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-purple-800 uppercase mb-1">Nama Guru</label>
+                                    <select 
+                                        className="w-full p-2 border border-purple-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        value={selectedTeacherFilter}
+                                        onChange={(e) => setSelectedTeacherFilter(e.target.value)}
+                                    >
+                                        <option value="Semua">Semua Guru</option>
+                                        {teachers
+                                            .filter(t => selectedBranchFilter === 'Semua' || t.branch === selectedBranchFilter)
+                                            .map(t => <option key={t.id} value={t.name}>{t.name}</option>)
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Summary Cards */}
+                            <div className="grid grid-cols-3 gap-4 mb-6">
+                                <div className="bg-green-50 p-3 rounded-lg border border-green-100 text-center">
+                                    <p className="text-xs text-green-600 font-bold uppercase">Hadir</p>
+                                    <p className="text-2xl font-bold text-green-800">{reportData.filter(r => r.status === 'Hadir').length}</p>
+                                </div>
+                                <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-center">
+                                    <p className="text-xs text-yellow-600 font-bold uppercase">Cuti</p>
+                                    <p className="text-2xl font-bold text-yellow-800">{reportData.filter(r => r.status === 'Cuti').length}</p>
+                                </div>
+                                <div className="bg-red-50 p-3 rounded-lg border border-red-100 text-center">
+                                    <p className="text-xs text-red-600 font-bold uppercase">Tidak Hadir</p>
+                                    <p className="text-2xl font-bold text-red-800">{reportData.filter(r => r.status === 'Tidak Hadir').length}</p>
+                                </div>
+                            </div>
+
+                            {/* Table */}
+                            <div className="overflow-x-auto border rounded-lg">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-100 text-gray-700 uppercase text-xs">
+                                        <tr>
+                                            <th className="px-4 py-3">Tarikh</th>
+                                            <th className="px-4 py-3">Nama Guru</th>
+                                            <th className="px-4 py-3">Cawangan</th>
+                                            <th className="px-4 py-3">Status</th>
+                                            <th className="px-4 py-3">Masuk</th>
+                                            <th className="px-4 py-3">Balik</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {reportData.map((row, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="px-4 py-2 font-mono text-gray-500">{row.date}</td>
+                                                <td className="px-4 py-2 font-medium text-gray-900">{row.name}</td>
+                                                <td className="px-4 py-2"><span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{row.branch}</span></td>
+                                                <td className="px-4 py-2">
+                                                    <span className={`px-2 py-1 rounded text-xs font-bold 
+                                                        ${row.status === 'Hadir' ? 'bg-green-100 text-green-700' : 
+                                                          row.status === 'Cuti' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {row.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-2 font-mono text-gray-600">{row.timeIn}</td>
+                                                <td className="px-4 py-2 font-mono text-gray-600">{row.timeOut}</td>
+                                            </tr>
+                                        ))}
+                                        {reportData.length === 0 && (
+                                            <tr><td colSpan="6" className="text-center py-8 text-gray-400">Tiada rekod dijumpai.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
                     {/* TAB 3: ANALISA */}
                     {adminTab === 'analysis' && (
-                        <div className="space-y-6">
+                        <div className="space-y-6 animate-fade-in">
                             <div className="bg-white rounded-xl shadow-lg p-6 h-80">
                                 <h3 className="font-bold mb-4">Analisa Tahunan</h3>
                                 {isRechartsLoaded ? (
@@ -491,6 +649,55 @@
                                     <thead className="text-xs uppercase bg-gray-50"><tr><th className="px-6 py-3">Nama</th><th className="px-6 py-3">Kehadiran</th><th className="px-6 py-3">Gred</th></tr></thead>
                                     <tbody>{mockMonthlyPerformance.map((m, i) => <tr key={i} className="border-b"><td className="px-6 py-4">{m.name}</td><td className="px-6 py-4">{m.peratus}%</td><td className="px-6 py-4 font-bold">{m.grade}</td></tr>)}</tbody>
                                 </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB 4: TETAPAN */}
+                    {adminTab === 'settings' && (
+                        <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
+                            <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><i className="ph ph-gear text-gray-600"></i> Tetapan Sistem</h3>
+                            
+                            <div className="space-y-6">
+                                <div className="p-4 bg-gray-50 border rounded-lg">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Nama Sekolah</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2 border rounded" 
+                                        placeholder="Cth: PASTI AL-HUDA" 
+                                        value={schoolName}
+                                        onChange={(e) => setSchoolName(e.target.value.toUpperCase())}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Nama ini akan dipaparkan di halaman utama dan laporan.</p>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 border rounded-lg">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Pautan Logo (URL Image)</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2 border rounded" 
+                                        placeholder="Cth: https://example.com/logo.png" 
+                                        value={logoUrl}
+                                        onChange={(e) => setLogoUrl(e.target.value)}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Biarkan kosong untuk menggunakan ikon lalai.</p>
+                                </div>
+
+                                <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-4">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm overflow-hidden">
+                                            {logoUrl ? (
+                                                <img src={logoUrl} alt="Preview" className="w-full h-full object-contain" />
+                                            ) : (
+                                                <i className="ph ph-user-circle text-4xl text-gray-400"></i>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-blue-900">Pratonton Logo</h4>
+                                        <p className="text-sm text-blue-700">Ini adalah bagaimana logo akan kelihatan pada aplikasi.</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -519,6 +726,10 @@
             const [newTeacherName, setNewTeacherName] = useState('');
             const [newTeacherBranch, setNewTeacherBranch] = useState('PAH1');
             
+            // State untuk Tetapan Sekolah
+            const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
+            const [logoUrl, setLogoUrl] = useState(''); // Default kosong (guna ikon)
+
             const isAdmin = userRole === 'admin';
 
             // --- LOGIC: DATA & ACTIONS ---
@@ -592,13 +803,32 @@
             };
 
             // UTAMA: SEMAK LOGIN
-            if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
+            if (!isLoggedIn) return (
+                <LoginScreen 
+                    onLogin={handleLogin} 
+                    schoolName={schoolName} 
+                    logoUrl={logoUrl} 
+                />
+            );
 
             return (
                 <div className="min-h-screen">
-                    <Header userRole={userRole} view={view} setView={setView} isAdmin={isAdmin} onLogout={handleLogout} />
+                    <Header 
+                        userRole={userRole} 
+                        view={view} 
+                        setView={setView} 
+                        isAdmin={isAdmin} 
+                        onLogout={handleLogout}
+                        schoolName={schoolName}
+                        logoUrl={logoUrl}
+                    />
                     <div className="container mx-auto pb-10 pt-4">
-                        {view === 'dashboard' && <DashboardView teachers={teachers} />}
+                        {view === 'dashboard' && (
+                            <DashboardView 
+                                teachers={teachers} 
+                                schoolName={schoolName} 
+                            />
+                        )}
                         {view === 'scan' && (
                             <ScanView 
                                 scanMode={scanMode} 
@@ -611,7 +841,8 @@
                                 scanMessage={scanMessage} 
                                 handleAttendanceSubmit={handleAttendanceSubmit} 
                                 handlePrint={handlePrint} 
-                                isPrinting={isPrinting} 
+                                isPrinting={isPrinting}
+                                schoolName={schoolName}
                             />
                         )}
                         {view === 'admin' && (
@@ -626,7 +857,11 @@
                                 newTeacherBranch={newTeacherBranch} 
                                 setNewTeacherBranch={setNewTeacherBranch} 
                                 handleAddTeacher={handleAddTeacher} 
-                                handleDeleteTeacher={handleDeleteTeacher} 
+                                handleDeleteTeacher={handleDeleteTeacher}
+                                schoolName={schoolName}
+                                setSchoolName={setSchoolName}
+                                logoUrl={logoUrl}
+                                setLogoUrl={setLogoUrl}
                             />
                         )}
                     </div>
