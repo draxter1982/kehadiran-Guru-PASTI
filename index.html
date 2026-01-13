@@ -59,13 +59,36 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // =================================================================================
+        // PENTING: UNTUK DATA TALLY (ONLINE), ANDA PERLU MENGISI BAHAGIAN INI
+        // =================================================================================
+        
+        const manualConfig = {
+            apiKey: "AIzaSyCQtQsuXQHK8IFy6TqDtz3J8106NW8cRiQ",
+            authDomain: "kehadiran-guru-pasti.firebaseapp.com",
+            projectId: "kehadiran-guru-pasti",
+            storageBucket: "kehadiran-guru-pasti.firebasestorage.app",
+            messagingSenderId: "605108935164",
+            appId: "1:605108935164:web:96cb7a2a5f4a9b81d5fa79",
+            measurementId: "G-R509G76MS2"
+        };
+        // =================================================================================
+
         // --- SISTEM PEMILIHAN MOD ---
         let firebaseConfig = null;
-        try {
-            if (typeof __firebase_config !== 'undefined') {
-                firebaseConfig = JSON.parse(__firebase_config);
-            }
-        } catch (e) { console.warn("Tiada config, beralih ke mod demo."); }
+        
+        // 1. Cek Manual Config dahulu
+        if (manualConfig && manualConfig.apiKey) {
+            firebaseConfig = manualConfig;
+        } 
+        // 2. Cek Environment Variable (untuk preview dalaman)
+        else {
+            try {
+                if (typeof __firebase_config !== 'undefined') {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                }
+            } catch (e) { console.warn("Tiada config env, beralih ke mod demo."); }
+        }
 
         if (firebaseConfig) {
             try {
@@ -305,7 +328,7 @@
             );
         };
 
-        const DashboardView = ({ teachers }) => {
+        const DashboardView = ({ teachers, isDemo }) => {
             const getChartData = () => {
                 const stats = { Hadir: 0, 'Dalam Proses': 0, Cuti: 0, 'Tugas Luar': 0, 'Tidak Hadir': 0 };
                 if (teachers) {
@@ -332,6 +355,12 @@
 
             return (
                 <div className="p-4 space-y-6 max-w-5xl mx-auto animate-fade-in no-print">
+                     {isDemo && (
+                        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
+                            <p className="font-bold">Amaran: Mod Demo (Local Storage)</p>
+                            <p className="text-sm">Sistem ini sedang berjalan secara offline. Data TIDAK akan diselaraskan (tally) dengan peranti lain. Sila masukkan konfigurasi Firebase dalam kod untuk mengaktifkan mod Online.</p>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         {data.map((item, idx) => (
                             <div key={idx} className="bg-white p-3 rounded-lg shadow border-l-4" style={{ borderLeftColor: item.fill }}>
@@ -557,10 +586,10 @@
                             {!isCameraOpen && (
                                 <div className="space-y-4">
                                     <button 
-                                        onClick={() => setIsCameraOpen(true)}
-                                        className="w-full h-64 bg-gradient-to-br from-green-500 to-green-700 text-white rounded-3xl shadow-2xl flex flex-col items-center justify-center gap-4 transition-transform transform hover:scale-105 active:scale-95 border-4 border-green-400/50"
+                                        onClick={() => setIsCameraOpen(true)} 
+                                        className="w-full py-12 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold text-2xl shadow-xl flex flex-col items-center justify-center gap-4 transition-transform active:scale-95 border-4 border-green-500"
                                     >
-                                        <div className="p-6 bg-white/20 rounded-full backdrop-blur-sm shadow-inner">
+                                        <div className="p-4 bg-white/20 rounded-full backdrop-blur-sm shadow-inner">
                                             <i className="ph ph-qr-code text-6xl"></i>
                                         </div>
                                         <div className="text-center">
@@ -624,7 +653,7 @@
             );
         };
 
-        const AdminView = ({ isAdmin, adminTab, setAdminTab, teachers, newTeacherName, setNewTeacherName, newTeacherBranch, setNewTeacherBranch, handleAddTeacher, handleDeleteTeacher, schoolName, setSchoolName, logoUrl, setLogoUrl, handleSaveSettings, handleResetDaily }) => {
+        const AdminView = ({ isAdmin, adminTab, setAdminTab, teachers, newTeacherName, setNewTeacherName, newTeacherBranch, setNewTeacherBranch, handleAddTeacher, handleDeleteTeacher, schoolName, setSchoolName, logoUrl, setLogoUrl, handleSaveSettings, handleResetDaily, isDemo }) => {
             if (!isAdmin) return <div className="p-8 text-center text-red-600">Akses Ditolak</div>;
             const [selectedMonth, setSelectedMonth] = useState('Januari');
             const [selectedBranchFilter, setSelectedBranchFilter] = useState('Semua');
@@ -655,6 +684,12 @@
             return (
                 <div className="p-4 max-w-5xl mx-auto no-print">
                     <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold">Panel Pentadbir</h2><p className="text-gray-500 text-sm">Pengurusan Data Sekolah (Disinkron)</p></div>
+                    {isDemo && (
+                         <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+                            <p className="font-bold">Amaran: Mod Demo (Local Storage)</p>
+                            <p className="text-sm">Sistem ini sedang berjalan secara offline. Data TIDAK akan diselaraskan (tally) dengan peranti lain. Sila masukkan konfigurasi Firebase dalam kod untuk mengaktifkan mod Online.</p>
+                        </div>
+                    )}
                     <div className="flex gap-2 mb-6 border-b overflow-x-auto pb-2">
                         <button onClick={() => setAdminTab('overview')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'overview' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500 hover:bg-gray-50'}`}>Pengurusan</button>
                         <button onClick={() => setAdminTab('teachers')} className={`px-4 py-2 font-bold rounded-t-lg whitespace-nowrap ${adminTab === 'teachers' ? 'bg-white text-blue-600 border-t border-x' : 'text-gray-500 hover:bg-gray-50'}`}>Senarai Guru</button>
@@ -1018,6 +1053,7 @@
                             <DashboardView 
                                 teachers={teachers} 
                                 schoolName={schoolName} 
+                                isDemo={isDemoMode} // Added prop
                             />
                         )}
                         {view === 'scan' && (
@@ -1056,6 +1092,7 @@
                                 setLogoUrl={setLogoUrl}
                                 handleSaveSettings={handleSaveSettings}
                                 handleResetDaily={handleResetDaily}
+                                isDemo={isDemoMode} // Added prop
                             />
                         )}
                     </div>
