@@ -25,8 +25,9 @@
     <style>
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .loading-bar-transition { transition: width 0.2s ease-out; }
         
+        .loading-bar-transition { transition: width 0.1s linear; }
+
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
@@ -71,8 +72,7 @@
         const BRANCHES = ['PAH1', 'PAH2', 'PAH3', 'PAH5'];
         const MONTHS = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
 
-        // --- UTILS: SEEDED RANDOM FOR CONSISTENT REPORT ---
-        // Fungsi ini memastikan data laporan nampak sama di semua device walaupun ia dijana secara simulasi
+        // --- UTILS ---
         const seededRandom = (seed) => {
             let value = 0;
             for(let i=0; i<seed.length; i++) value += seed.charCodeAt(i);
@@ -80,17 +80,36 @@
             return x - Math.floor(x);
         };
 
-        // --- COMPONENT: LOADING SCREEN ---
-        const LoadingScreen = ({ progress }) => (
+        // --- COMPONENT: LOADING SCREEN (IMPROVED) ---
+        const LoadingScreen = ({ progress, onSkip }) => (
             <div className="fixed inset-0 bg-green-700 flex flex-col items-center justify-center z-50 text-white">
-                <div className="relative mb-6">
-                    <div className="w-16 h-16 border-4 border-green-200 border-t-white rounded-full animate-spin"></div>
+                <div className="relative mb-8">
+                    {/* Spinner */}
+                    <div className="w-24 h-24 border-4 border-green-400 border-t-white rounded-full animate-spin"></div>
+                    {/* Percentage Text - Centered and Larger */}
+                    <div className="absolute inset-0 flex items-center justify-center font-bold text-xl drop-shadow-md">
+                        {progress}%
+                    </div>
                 </div>
-                <h1 className="text-2xl font-bold mb-2 tracking-wide">SISTEM PASTI</h1>
-                <p className="text-green-100 text-sm mb-6 animate-pulse">Menyelaraskan Data...</p>
-                <div className="w-64 h-2 bg-green-900 rounded-full overflow-hidden">
-                    <div className="h-full bg-white loading-bar-transition" style={{ width: `${progress}%` }}></div>
+                
+                <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
+                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Sedang Memuatkan Data...</p>
+                
+                {/* Progress Bar */}
+                <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
+                    <div 
+                        className="h-full bg-white loading-bar-transition shadow-lg" 
+                        style={{ width: `${progress}%` }}
+                    ></div>
                 </div>
+
+                {/* Skip Button - Appears if loading feels stuck */}
+                <button 
+                    onClick={onSkip}
+                    className="mt-8 text-xs font-bold text-green-200 hover:text-white underline hover:no-underline transition-colors opacity-80"
+                >
+                    Lambat? Langkau Loading &gt;&gt;
+                </button>
             </div>
         );
 
@@ -289,8 +308,9 @@
             const handleTeacherChange = (e) => {
                 const newId = e.target.value;
                 setSelectedTeacherId(newId);
+                // AUTO SUBMIT: Terus hantar data jika mod Masuk atau Balik dipilih
                 if (newId && (scanMode === 'clock_in' || scanMode === 'clock_out')) {
-                    handleAttendanceSubmit(newId);
+                    handleAttendanceSubmit(newId); 
                 }
             };
 
@@ -358,7 +378,7 @@
                                     )}
 
                                     {(scanMode === 'clock_in' || scanMode === 'clock_out') && (
-                                        <p className="text-center text-sm text-gray-500 italic mt-2">Data akan dihantar secara automatik apabila nama dipilih.</p>
+                                        <p className="text-center text-sm text-gray-500 italic mt-2">Data sedang dihantar secara automatik...</p>
                                     )}
 
                                     {scanMessage && <div className="p-3 bg-green-100 text-green-700 rounded-lg text-center font-bold mt-2 animate-bounce">{scanMessage}</div>}
@@ -753,18 +773,19 @@
             useEffect(() => {
                 const progressTimer = setInterval(() => {
                     setLoadingProgress(prev => {
+                        // LAJUKAN LOADING: Tambah 5 setiap interval (lebih cepat)
                         if (prev >= 90 && !isFirebaseReady) return 90;
                         if (isFirebaseReady) return 100;
-                        return prev + 2; 
+                        return prev + 5; 
                     });
-                }, 50);
+                }, 20); // Interval lebih pendek (20ms)
 
                 const checkFirebase = setInterval(() => {
                     if (window.firebaseOps && window.firebaseOps.auth) {
                         setIsFirebaseReady(true);
                         clearInterval(checkFirebase);
                     }
-                }, 100);
+                }, 50); // Cek lebih kerap
 
                 return () => {
                     clearInterval(progressTimer);
@@ -943,8 +964,14 @@
                 setView('dashboard');
             };
 
+            const handleSkipLoading = () => {
+                setLoadingProgress(100);
+                setIsFirebaseReady(true);
+            };
+
+            // PAPAR LOADING JIKA PROGRESS BELUM 100 ATAU FIREBASE BELUM READY
             if (loadingProgress < 100 || !isFirebaseReady) {
-                return <LoadingScreen progress={loadingProgress} />;
+                return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} />;
             }
 
             if (!isLoggedIn) return (
