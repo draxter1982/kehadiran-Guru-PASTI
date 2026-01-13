@@ -92,32 +92,42 @@
             return x - Math.floor(x);
         };
 
-        // --- HELPER: FORCE AUTH CHECK (AUTO-CONNECT) ---
-        // Fungsi ini akan mencuba menyambung secara automatik jika terputus
+        // --- HELPER: ROBUST AUTH CHECK ---
         const ensureAuthReady = async () => {
-            // Tunggu sehingga firebaseOps dimuatkan (maksimum 5 saat)
+            // 1. Tunggu modul Firebase dimuatkan (Max 5 saat)
             let attempts = 0;
-            while (!window.firebaseOps && attempts < 20) {
-                await new Promise(r => setTimeout(r, 250));
+            while (!window.firebaseOps && attempts < 50) {
+                await new Promise(r => setTimeout(r, 100));
                 attempts++;
             }
 
-            if (!window.firebaseOps) return false;
+            if (!window.firebaseOps) {
+                console.error("Firebase module missing");
+                return false;
+            }
 
             const { auth, signInAnonymously } = window.firebaseOps;
             
-            // Jika belum login, paksa login sekarang
-            if (!auth.currentUser) {
-                try {
-                    console.log("Menghubungkan semula ke pangkalan data...");
-                    await signInAnonymously(auth);
-                    return true;
-                } catch (e) {
-                    console.error("Gagal menyambung:", e);
-                    return false;
+            // 2. Jika sudah ada user, return true
+            if (auth.currentUser) return true;
+
+            // 3. Jika tiada user, cuba log masuk paksa (Force Login)
+            try {
+                console.log("Mencuba sambungan paksa...");
+                await signInAnonymously(auth);
+                
+                // Tunggu sekejap untuk state update
+                let loginAttempts = 0;
+                while (!auth.currentUser && loginAttempts < 20) {
+                    await new Promise(r => setTimeout(r, 100));
+                    loginAttempts++;
                 }
+                
+                return !!auth.currentUser;
+            } catch (e) {
+                console.error("Force auth failed", e);
+                return false;
             }
-            return true;
         };
 
         // --- COMPONENT: LOADING SCREEN ---
@@ -130,7 +140,7 @@
                     </div>
                 </div>
                 <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
-                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Memulakan Sistem...</p>
+                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Menghubungkan ke Awan...</p>
                 <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
                     <div className="h-full bg-white loading-bar-transition shadow-lg" style={{ width: `${progress}%` }}></div>
                 </div>
@@ -154,7 +164,7 @@
                         <div className="flex flex-col text-xs text-green-100 opacity-90 mt-1">
                             <span className="font-semibold">{currentTeacher ? `Hi, ${currentTeacher.name}` : (userRole === 'admin' ? 'Panel Pentadbir' : 'Mod Guru')}</span>
                             <span className="flex items-center gap-1" title="Status Sambungan">
-                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-300' : 'bg-red-500'}`}></span>
+                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-300' : 'bg-yellow-400 animate-pulse'}`}></span>
                                 {isOnline ? 'Online' : 'Menghubungkan...'}
                             </span>
                         </div>
