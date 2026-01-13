@@ -38,6 +38,12 @@
         #reader__dashboard_section_csr button { 
             background-color: #2563eb; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: bold; margin-top: 10px; cursor: pointer;
         }
+        #reader video { 
+            object-fit: cover; 
+            width: 100% !important; 
+            height: 100% !important; 
+            border-radius: 0.5rem;
+        }
 
         @media print {
             .no-print { display: none !important; }
@@ -408,56 +414,93 @@
             const [tempScanType, setTempScanType] = useState(null);
             const [leaveReason, setLeaveReason] = useState('');
             const [kioskTeacherId, setKioskTeacherId] = useState('');
+            
+            // Ref untuk pengimbas kamera
+            const scannerRef = useRef(null);
 
-            // --- FUNGSI KAMERA SEBENAR ---
+            // --- FUNGSI KAMERA SEBENAR (Html5Qrcode) ---
             useEffect(() => {
-                let html5QrcodeScanner;
                 if (isCameraOpen && userRole === 'guru') {
-                    setTimeout(() => {
+                    // Gunakan sedikit delay untuk pastikan DOM 'reader' wujud
+                    const timer = setTimeout(() => {
                          if(document.getElementById('reader')) {
-                             html5QrcodeScanner = new Html5QrcodeScanner(
-                                "reader",
-                                { fps: 10, qrbox: { width: 250, height: 250 } },
-                                false
-                            );
-                            html5QrcodeScanner.render(
-                                (decodedText) => {
-                                    handleRealScan(decodedText); // Scan berjaya
-                                    html5QrcodeScanner.clear();
-                                    setIsCameraOpen(false);
-                                },
-                                (errorMessage) => {}
-                            );
+                             // Initialize Html5Qrcode (Bukan Scanner widget) untuk kawalan penuh
+                             const html5QrCode = new Html5Qrcode("reader");
+                             scannerRef.current = html5QrCode;
+
+                             const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+                             
+                             // Mula kamera belakang (environment)
+                             html5QrCode.start(
+                                 { facingMode: "environment" }, 
+                                 config, 
+                                 (decodedText) => {
+                                     // Berjaya scan
+                                     handleRealScan(decodedText);
+                                 },
+                                 (errorMessage) => {
+                                     // Ralat imbasan (biasa jika tiada QR dikesan)
+                                 }
+                             ).catch(err => {
+                                 console.error("Ralat memulakan kamera:", err);
+                                 alert("Gagal memulakan kamera. Sila pastikan izin kamera diberikan.");
+                                 setIsCameraOpen(false);
+                             });
                          }
-                    }, 100);
+                    }, 300); // 300ms delay selamat
+
+                    return () => clearTimeout(timer);
                 }
                 
+                // Cleanup function
                 return () => {
-                    if(html5QrcodeScanner) {
-                        html5QrcodeScanner.clear().catch(error => console.error("Failed to clear scanner. ", error));
+                    if(scannerRef.current) {
+                        scannerRef.current.stop().then(() => {
+                            scannerRef.current.clear();
+                            scannerRef.current = null;
+                        }).catch(err => console.log("Stop failed", err));
                     }
                 };
             }, [isCameraOpen, userRole]);
 
+            const stopCamera = () => {
+                if (scannerRef.current) {
+                    scannerRef.current.stop().then(() => {
+                        scannerRef.current.clear();
+                        setIsCameraOpen(false);
+                    }).catch(err => {
+                        console.error("Gagal tutup kamera", err);
+                        setIsCameraOpen(false); // Force close UI anyway
+                    });
+                } else {
+                    setIsCameraOpen(false);
+                }
+            };
+
             const handleRealScan = (text) => {
                 if (!currentTeacher) return;
                 
-                if (text === 'PASTI_CLOCK_IN') {
-                    handleAttendanceSubmit(currentTeacher.id, 'clock_in');
-                    setNotification("Hadir: Masuk Berjaya!");
-                    setTimeout(() => setNotification(''), 3000);
-                } else if (text === 'PASTI_CLOCK_OUT') {
-                    handleAttendanceSubmit(currentTeacher.id, 'clock_out');
-                    setNotification("Hadir: Balik Berjaya!");
-                    setTimeout(() => setNotification(''), 3000);
-                } else if (text === 'PASTI_OUTSTATION') {
-                    setTempScanType('outstation');
-                    setShowReasonInput(true); // Buka input form
-                } else if (text === 'PASTI_LEAVE') {
-                    setTempScanType('leave');
-                    setShowReasonInput(true); // Buka input form
+                // Peta kod QR kepada tindakan
+                let type = null;
+                if (text === 'PASTI_CLOCK_IN') type = 'clock_in';
+                else if (text === 'PASTI_CLOCK_OUT') type = 'clock_out';
+                else if (text === 'PASTI_OUTSTATION') type = 'outstation';
+                else if (text === 'PASTI_LEAVE') type = 'leave';
+                
+                if (type) {
+                    // Hentikan kamera sementara
+                    stopCamera();
+                    
+                    if (type === 'outstation' || type === 'leave') {
+                        setTempScanType(type);
+                        setShowReasonInput(true);
+                    } else {
+                        handleAttendanceSubmit(currentTeacher.id, type);
+                        setNotification(type === 'clock_in' ? "Masuk Berjaya!" : "Balik Berjaya!");
+                        setTimeout(() => setNotification(''), 3000);
+                    }
                 } else {
-                    alert("Kod QR tidak dikenali: " + text);
+                    alert("Kod QR tidak sah: " + text);
                 }
             };
             
@@ -472,6 +515,7 @@
                 }
             };
 
+            // Jika Guru (Personal Mode)
             if (userRole === 'guru' && currentTeacher) {
                 // PAPARAN INPUT BORANG (SELEPAS SCAN CUTI/LUAR)
                 if (showReasonInput) {
@@ -509,29 +553,40 @@
                             </div>
                             <hr />
                             
+                            {/* Butang Buka Kamera */}
                             {!isCameraOpen && (
                                 <div className="space-y-4">
-                                    <p className="text-gray-600">Sila tekan butang di bawah untuk membuka kamera dan mengimbas kod QR di dinding sekolah.</p>
                                     <button 
-                                        onClick={() => setIsCameraOpen(true)} 
-                                        className="w-full py-12 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold text-2xl shadow-xl flex flex-col items-center justify-center gap-4 transition-transform active:scale-95 border-4 border-green-500"
+                                        onClick={() => setIsCameraOpen(true)}
+                                        className="w-full h-64 bg-gradient-to-br from-green-500 to-green-700 text-white rounded-3xl shadow-2xl flex flex-col items-center justify-center gap-4 transition-transform transform hover:scale-105 active:scale-95 border-4 border-green-400/50"
                                     >
-                                        <div className="p-4 bg-white/20 rounded-full"><i className="ph ph-qr-code text-6xl"></i></div>
-                                        IMBAS SEKARANG
+                                        <div className="p-6 bg-white/20 rounded-full backdrop-blur-sm shadow-inner">
+                                            <i className="ph ph-qr-code text-6xl"></i>
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="block text-3xl font-extrabold tracking-tight drop-shadow-md">IMBAS QR</span>
+                                            <span className="text-green-100 font-medium text-sm mt-1 bg-black/10 px-3 py-1 rounded-full">Kamera Sebenar</span>
+                                        </div>
                                     </button>
+                                    <p className="text-gray-500 text-sm">Tekan butang di atas untuk mengimbas kod QR dinding.</p>
                                 </div>
                             )}
 
+                            {/* Tempat Render Kamera */}
                             {isCameraOpen && (
                                 <div className="fixed inset-0 camera-overlay z-50 flex flex-col items-center justify-center p-4">
                                     <div className="relative w-full max-w-md bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-700">
                                         <div className="bg-gray-900 p-4 flex justify-between items-center text-white">
                                             <h3 className="font-bold flex items-center gap-2"><i className="ph ph-camera"></i> Imbas QR</h3>
-                                            <button onClick={() => setIsCameraOpen(false)} className="text-gray-400 hover:text-white"><i className="ph ph-x text-2xl"></i></button>
+                                            <button onClick={stopCamera} className="text-gray-400 hover:text-white"><i className="ph ph-x text-2xl"></i></button>
                                         </div>
                                         
                                         {/* REAL CAMERA REGION */}
-                                        <div id="reader" className="bg-white"></div>
+                                        <div id="reader" className="bg-black w-full h-80"></div>
+                                        
+                                        <div className="bg-gray-900 p-4 text-center text-gray-400 text-sm">
+                                            Halakan kamera pada Kod QR dinding
+                                        </div>
                                     </div>
                                 </div>
                             )}
