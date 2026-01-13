@@ -93,7 +93,7 @@
                 </div>
                 
                 <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
-                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Sedang Memuatkan Data...</p>
+                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Menghubungkan ke Awan...</p>
                 
                 {/* Progress Bar */}
                 <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
@@ -108,7 +108,7 @@
                     onClick={onSkip}
                     className="mt-8 text-xs font-bold text-green-200 hover:text-white underline hover:no-underline transition-colors opacity-80"
                 >
-                    Lambat? Langkau Loading &gt;&gt;
+                    Lambat? Tekan untuk Masuk Segera &gt;&gt;
                 </button>
             </div>
         );
@@ -128,7 +128,7 @@
                             <span>{userRole === 'admin' ? 'Pentadbir' : 'Guru'}</span>
                             <span className="flex items-center gap-1 bg-green-800 px-1.5 rounded-full" title="Status Sambungan">
                                 <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-500'}`}></span>
-                                {isOnline ? 'Online' : 'Offline'}
+                                {isOnline ? 'Online' : 'Menunggu Sambungan...'}
                             </span>
                         </div>
                     </div>
@@ -751,6 +751,7 @@
             const [currentUser, setCurrentUser] = useState(null);
             const [isFirebaseReady, setIsFirebaseReady] = useState(false);
             const [loadingProgress, setLoadingProgress] = useState(0); 
+            const [isLoadingSkipped, setIsLoadingSkipped] = useState(false); // New state to track skipped loading
 
             const [teachers, setTeachers] = useState([]);
             const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
@@ -796,6 +797,9 @@
             // --- FIREBASE AUTH ---
             useEffect(() => {
                 if (!isFirebaseReady) return;
+                
+                // SAFEGUARD: Check if firebaseOps actually exists before destructing
+                if (!window.firebaseOps) return;
 
                 const { auth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } = window.firebaseOps;
                 
@@ -822,6 +826,7 @@
             // --- DATA SYNC ---
             useEffect(() => {
                 if (!currentUser || !isFirebaseReady) return;
+                if (!window.firebaseOps) return; // SAFEGUARD
 
                 const { db, collection, doc, onSnapshot, appId } = window.firebaseOps;
 
@@ -853,6 +858,12 @@
             const handleAttendanceSubmit = async (autoSubmitId = null) => {
                 const targetId = autoSubmitId || selectedTeacherId;
                 if (!targetId) return;
+
+                // SAFEGUARD: Check Firebase connection before attempting write
+                if (!window.firebaseOps || !currentUser) {
+                    alert("Sistem belum bersambung ke pangkalan data. Sila tunggu sebentar atau muat semula.");
+                    return;
+                }
 
                 const now = new Date();
                 const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -892,6 +903,12 @@
                     alert("Sila masukkan nama guru.");
                     return;
                 }
+                
+                if (!window.firebaseOps || !currentUser) {
+                    alert("Sistem belum bersedia.");
+                    return;
+                }
+
                 const { db, collection, addDoc, appId } = window.firebaseOps;
                 
                 try {
@@ -911,6 +928,8 @@
             };
 
             const handleDeleteTeacher = async (id) => {
+                if (!window.firebaseOps || !currentUser) return;
+
                 if (confirm("Adakah anda pasti? Data akan dipadam dari semua peranti.")) {
                     const { db, doc, deleteDoc, appId } = window.firebaseOps;
                     try {
@@ -922,6 +941,8 @@
             };
 
             const handleSaveSettings = async () => {
+                if (!window.firebaseOps || !currentUser) return;
+
                 const { db, doc, setDoc, appId } = window.firebaseOps;
                 try {
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), {
@@ -936,6 +957,7 @@
 
             const handleResetDaily = async () => {
                 if(!confirm("Reset semua guru kepada 'Tidak Hadir'?")) return;
+                if (!window.firebaseOps || !currentUser) return;
                 
                 const { db, doc, updateDoc, appId } = window.firebaseOps;
                 
@@ -965,12 +987,15 @@
             };
 
             const handleSkipLoading = () => {
-                setLoadingProgress(100);
-                setIsFirebaseReady(true);
+                setIsLoadingSkipped(true);
+                // Force Firebase ready state true so UI renders, 
+                // but safeguard checks will prevent crashes if it's really not ready
+                setIsFirebaseReady(true); 
             };
 
-            // PAPAR LOADING JIKA PROGRESS BELUM 100 ATAU FIREBASE BELUM READY
-            if (loadingProgress < 100 || !isFirebaseReady) {
+            // PAPAR LOADING JIKA PROGRESS BELUM 100 DAN BELUM DISKIP
+            // DAN JIKA FIREBASE BELUM READY (KECUALI DAH SKIP)
+            if (!isLoadingSkipped && (loadingProgress < 100 || !isFirebaseReady)) {
                 return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} />;
             }
 
