@@ -26,6 +26,8 @@
         .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
+        .loading-bar-transition { transition: width 0.5s ease-out; }
+
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
@@ -40,32 +42,17 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Konfigurasi Firebase dari persekitaran
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        // Dedahkan fungsi kepada tetingkap global untuk React
-        // PENTING: Masukkan 'auth' dan 'db' ke dalam firebaseOps supaya mudah diakses
         window.firebaseOps = { 
-            auth, 
-            db, 
-            appId,
-            signInAnonymously, 
-            signInWithCustomToken, 
-            onAuthStateChanged, 
-            collection, 
-            doc, 
-            getDoc, 
-            setDoc, 
-            addDoc, 
-            updateDoc, 
-            deleteDoc, 
-            onSnapshot 
+            auth, db, appId,
+            signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+            collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot 
         };
-        
         console.log("Firebase initialized");
     </script>
 </head>
@@ -85,8 +72,28 @@
         const BRANCHES = ['PAH1', 'PAH2', 'PAH3', 'PAH5'];
         const MONTHS = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
 
-        // --- SUB-COMPONENTS ---
+        // --- COMPONENT: LOADING SCREEN ---
+        const LoadingScreen = ({ progress }) => (
+            <div className="fixed inset-0 bg-green-700 flex flex-col items-center justify-center z-50 text-white">
+                <div className="relative mb-6">
+                    <div className="w-20 h-20 border-4 border-green-200 border-t-white rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center font-bold text-sm">
+                        {progress}%
+                    </div>
+                </div>
+                <h1 className="text-2xl font-bold mb-2 tracking-wide">SISTEM PASTI</h1>
+                <p className="text-green-100 text-sm mb-6 animate-pulse">Menghubungkan ke Pangkalan Data...</p>
+                
+                <div className="w-64 h-2 bg-green-900 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-white loading-bar-transition" 
+                        style={{ width: `${progress}%` }}
+                    ></div>
+                </div>
+            </div>
+        );
 
+        // --- SUB-COMPONENTS ---
         const Header = ({ userRole, view, setView, isAdmin, onLogout, schoolName, logoUrl }) => (
             <div className="bg-green-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 no-print">
                 <div className="flex items-center gap-3">
@@ -712,6 +719,7 @@
             const [userRole, setUserRole] = useState(null); 
             const [currentUser, setCurrentUser] = useState(null);
             const [isFirebaseReady, setIsFirebaseReady] = useState(false);
+            const [loadingProgress, setLoadingProgress] = useState(0); // STATE UNTUK ANIMASI %
 
             const [teachers, setTeachers] = useState([]);
             const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
@@ -730,16 +738,32 @@
             
             const isAdmin = userRole === 'admin';
 
-            // --- FIREBASE INIT WAIT ---
+            // --- ANIMATION & FIREBASE INIT WAIT ---
             useEffect(() => {
+                // Timer untuk animasi progress bar (Naik sedikit demi sedikit)
+                const progressTimer = setInterval(() => {
+                    setLoadingProgress(prev => {
+                        // Jika firebase belum ready, jangan lebih 90%
+                        if (prev >= 90 && !isFirebaseReady) return 90;
+                        // Jika firebase ready, biarkan naik ke 100
+                        if (isFirebaseReady) return 100;
+                        return prev + 2; // Kelajuan loading
+                    });
+                }, 50);
+
+                // Check Firebase readiness
                 const checkFirebase = setInterval(() => {
                     if (window.firebaseOps && window.firebaseOps.auth) {
                         setIsFirebaseReady(true);
                         clearInterval(checkFirebase);
                     }
                 }, 100);
-                return () => clearInterval(checkFirebase);
-            }, []);
+
+                return () => {
+                    clearInterval(progressTimer);
+                    clearInterval(checkFirebase);
+                };
+            }, [isFirebaseReady]);
 
             // --- FIREBASE AUTH ---
             useEffect(() => {
@@ -908,7 +932,10 @@
                 setView('dashboard');
             };
 
-            if (!isFirebaseReady) return <div className="min-h-screen flex items-center justify-center font-sans text-gray-600">Memuatkan Sistem...</div>;
+            // PAPAR LOADING JIKA PROGRESS BELUM 100 ATAU FIREBASE BELUM READY
+            if (loadingProgress < 100 || !isFirebaseReady) {
+                return <LoadingScreen progress={loadingProgress} />;
+            }
 
             if (!isLoggedIn) return (
                 <LoginScreen 
