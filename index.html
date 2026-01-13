@@ -460,26 +460,6 @@
                     alert("Kod QR tidak dikenali: " + text);
                 }
             };
-
-            const handleCameraScan = (type) => {
-                // FUNGSI UNTUK SIMULASI AGAR SAMA DENGAN REAL SCAN
-                setIsCameraOpen(false); // Tutup kamera
-                
-                // Jika Cuti/Tugas Luar, minta input dulu
-                if (type === 'outstation' || type === 'leave') {
-                    setTempScanType(type);
-                    setShowReasonInput(true);
-                    return;
-                }
-
-                // Jika Masuk/Balik, terus submit
-                const teacherId = currentTeacher ? currentTeacher.id : kioskTeacherId;
-                if (teacherId) {
-                    handleAttendanceSubmit(teacherId, type, leaveReason);
-                    setNotification("Data masa anda telah diterima sistem");
-                    setTimeout(() => setNotification(''), 3000);
-                }
-            };
             
             const submitReason = () => {
                 if (tempScanType && currentTeacher) {
@@ -532,8 +512,12 @@
                             {!isCameraOpen && (
                                 <div className="space-y-4">
                                     <p className="text-gray-600">Sila tekan butang di bawah untuk membuka kamera dan mengimbas kod QR di dinding sekolah.</p>
-                                    <button onClick={() => setIsCameraOpen(true)} className="w-full py-5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl shadow-lg flex items-center justify-center gap-3 transition-transform active:scale-95">
-                                        <i className="ph ph-camera text-3xl"></i>BUKA KAMERA
+                                    <button 
+                                        onClick={() => setIsCameraOpen(true)} 
+                                        className="w-full py-12 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold text-2xl shadow-xl flex flex-col items-center justify-center gap-4 transition-transform active:scale-95 border-4 border-green-500"
+                                    >
+                                        <div className="p-4 bg-white/20 rounded-full"><i className="ph ph-qr-code text-6xl"></i></div>
+                                        IMBAS SEKARANG
                                     </button>
                                 </div>
                             )}
@@ -548,16 +532,6 @@
                                         
                                         {/* REAL CAMERA REGION */}
                                         <div id="reader" className="bg-white"></div>
-
-                                        <div className="bg-gray-900 p-6 space-y-3">
-                                            <p className="text-gray-400 text-xs text-center mb-2 uppercase tracking-widest">Simulasi: Pilih Kod QR Dinding</p>
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <button onClick={() => handleCameraScan('clock_in')} className="bg-blue-600 hover:bg-blue-500 text-white py-3 rounded font-bold text-sm">QR MASUK</button>
-                                                <button onClick={() => handleCameraScan('clock_out')} className="bg-rose-600 hover:bg-rose-500 text-white py-3 rounded font-bold text-sm">QR BALIK</button>
-                                                <button onClick={() => handleCameraScan('outstation')} className="bg-purple-600 hover:bg-purple-500 text-white py-3 rounded font-bold text-sm">TUGAS LUAR</button>
-                                                <button onClick={() => handleCameraScan('leave')} className="bg-orange-600 hover:bg-orange-500 text-white py-3 rounded font-bold text-sm">CUTI / MC</button>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -944,9 +918,11 @@
                 setUserRole(role);
                 if (role === 'guru' && teacherData) {
                     setCurrentTeacher(teacherData);
+                    setView('scan'); // Change to scan
+                } else {
+                    setView('dashboard');
                 }
                 setIsLoggedIn(true);
-                setView('dashboard');
             };
 
             const handleSkipLoading = () => {
