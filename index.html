@@ -48,37 +48,44 @@
         .print-only { display: none; }
     </style>
 
-    <!-- 6. FIREBASE SETUP (MODULE) -->
+    <!-- 6. FIREBASE SETUP (MODULE) & DEMO MODE FALLBACK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- KONFIGURASI FIREBASE ---
-        // Jika anda guna StackBlitz, ganti bahagian ini dengan config dari Firebase Console anda!
-        let firebaseConfig;
-        try {
-            // Cuba ambil dari environment (jika dalam preview ini)
-            if (typeof __firebase_config !== 'undefined') {
-                firebaseConfig = JSON.parse(__firebase_config);
-            } else {
-                // JIKA DI STACKBLITZ/LOCAL: Masukkan config anda di sini
-                // Contoh:
-                // firebaseConfig = {
-                //   apiKey: "AIzaSy...",
-                //   authDomain: "pasti-app.firebaseapp.com",
-                //   projectId: "pasti-app",
-                //   storageBucket: "pasti-app.firebasestorage.app",
-                //   messagingSenderId: "...",
-                //   appId: "..."
-                // };
-                console.warn("Tiada konfigurasi Firebase ditemui. Sila masukkan config manual.");
-            }
-        } catch (e) {
-            console.error("Ralat parsing config:", e);
+        // =================================================================================
+        // ARAHAN: UNTUK MENGHUBUNGKAN SEMUA PERANTI (ONLINE), ISI RUANGAN INI
+        // =================================================================================
+        // 1. Buka https://console.firebase.google.com/
+        // 2. Create Project > Register App (Web) > Copy config
+        // 3. Masukkan config anda di dalam 'manualConfig' di bawah.
+        
+        const manualConfig = {
+            // apiKey: "ISI_API_KEY_ANDA_DI_SINI",
+            // authDomain: "projek-anda.firebaseapp.com",
+            // projectId: "projek-anda",
+            // storageBucket: "projek-anda.appspot.com",
+            // messagingSenderId: "123456789",
+            // appId: "1:123456789:web:abcdef"
+        };
+
+        // =================================================================================
+
+        // --- SISTEM PEMILIHAN MOD (AUTO DETECT) ---
+        let firebaseConfig = null;
+        
+        // 1. Semak jika pengguna telah masukkan manualConfig
+        if (manualConfig && manualConfig.apiKey) {
+            firebaseConfig = manualConfig;
+        } 
+        // 2. Jika tiada, cuba cari environment variable (untuk preview dalaman)
+        else if (typeof __firebase_config !== 'undefined') {
+             try { firebaseConfig = JSON.parse(__firebase_config); } catch(e) {}
         }
 
         if (firebaseConfig) {
+            // --- MOD ONLINE (FIREBASE SEBENAR) ---
             try {
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
@@ -86,17 +93,102 @@
                 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 window.firebaseOps = { 
-                    auth, db, appId,
+                    auth, db, appId, mode: 'online',
                     signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
                     collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot 
                 };
-                console.log("Firebase initialized successfully");
+                console.log("Firebase initialized successfully (Online)");
             } catch (error) {
                 console.error("Firebase init failed:", error);
-                window.firebaseInitError = error.message;
+                initDemoMode(); // Fallback jika init gagal
             }
         } else {
-            window.firebaseInitError = "Konfigurasi Firebase Hilang (Sila edit kod)";
+            // --- MOD DEMO (OFFLINE / LOCALSTORAGE) ---
+            initDemoMode();
+        }
+
+        function initDemoMode() {
+            console.warn("Menggunakan Mod Demo (Simpanan Tempatan)");
+            
+            // Mock Data Handler
+            const getLocal = (key) => JSON.parse(localStorage.getItem('demo_' + key) || '[]');
+            const setLocal = (key, data) => localStorage.setItem('demo_' + key, JSON.stringify(data));
+            const listeners = {}; // { 'teachers': [cb1, cb2] }
+
+            const notify = (key) => {
+                if (listeners[key]) {
+                    const data = getLocal(key);
+                    const snapshot = { docs: data.map(d => ({ id: d.id, data: () => d, exists: () => true })) };
+                    // Handle doc snapshot structure slightly differently
+                    const docSnapshot = { exists: () => data.length > 0, data: () => data[0] || {} }; 
+                    
+                    listeners[key].forEach(cb => {
+                        // Very basic distinction between collection and doc listener mock
+                        if (key.includes('_config')) cb(docSnapshot);
+                        else cb(snapshot);
+                    });
+                }
+            };
+
+            // Mock Auth User
+            const mockUser = { uid: 'demo-user-123', isAnonymous: true };
+
+            window.firebaseOps = {
+                mode: 'demo',
+                auth: { currentUser: mockUser },
+                appId: 'demo-app',
+                
+                signInAnonymously: async () => ({ user: mockUser }),
+                signInWithCustomToken: async () => ({ user: mockUser }),
+                onAuthStateChanged: (auth, cb) => { cb(mockUser); return () => {}; },
+                
+                collection: (db, ...path) => ({ type: 'col', key: path[path.length - 1] }),
+                doc: (db, ...path) => ({ type: 'doc', key: path[path.length - 1], id: path[path.length - 1] === 'config' ? 'config' : path[path.length - 1] }),
+                
+                onSnapshot: (ref, cb) => {
+                    const key = ref.key === 'config' ? 'settings_config' : 'teachers';
+                    if (!listeners[key]) listeners[key] = [];
+                    listeners[key].push(cb);
+                    notify(key); // Initial call
+                    return () => {};
+                },
+                
+                addDoc: async (ref, data) => {
+                    const key = 'teachers';
+                    const list = getLocal(key);
+                    const newId = 'demo_' + Date.now();
+                    list.push({ id: newId, ...data });
+                    setLocal(key, list);
+                    notify(key);
+                    return { id: newId };
+                },
+                
+                updateDoc: async (ref, data) => {
+                    const key = 'teachers';
+                    const list = getLocal(key);
+                    const idx = list.findIndex(i => i.id === ref.id);
+                    if (idx !== -1) {
+                        list[idx] = { ...list[idx], ...data };
+                        setLocal(key, list);
+                        notify(key);
+                    }
+                },
+                
+                deleteDoc: async (ref) => {
+                    const key = 'teachers';
+                    let list = getLocal(key);
+                    list = list.filter(i => i.id !== ref.id);
+                    setLocal(key, list);
+                    notify(key);
+                },
+
+                setDoc: async (ref, data) => {
+                    if (ref.key === 'config') {
+                        setLocal('settings_config', [data]); // Save as array for helper simplicity
+                        notify('settings_config');
+                    }
+                }
+            };
         }
     </script>
 </head>
@@ -124,85 +216,59 @@
             return x - Math.floor(x);
         };
 
-        // --- HELPER: ROBUST AUTH CHECK (AUTO-CONNECT) ---
+        // --- HELPER: ROBUST AUTH CHECK ---
         const ensureAuthReady = async () => {
-            // 1. Tunggu modul Firebase dimuatkan
+            // Tunggu modul (sama ada Firebase sebenar atau Mock)
             let attempts = 0;
             while (!window.firebaseOps && attempts < 50) {
-                if (window.firebaseInitError) {
-                    alert("Ralat Inisialisasi Firebase: " + window.firebaseInitError + "\n\nSila periksa kod (bahagian <script type='module'>) dan masukkan config Firebase anda.");
-                    return false;
-                }
                 await new Promise(r => setTimeout(r, 100));
                 attempts++;
             }
 
-            if (!window.firebaseOps) {
-                alert("Modul Firebase gagal dimuatkan. Sila refresh.");
-                return false;
-            }
+            if (!window.firebaseOps) return false;
+
+            // Jika mod demo, sentiasa ready
+            if (window.firebaseOps.mode === 'demo') return true;
 
             const { auth, signInAnonymously } = window.firebaseOps;
             
             if (auth.currentUser) return true;
 
             try {
-                // console.log("Mencuba sambungan paksa (Auto-Retry)...");
                 await signInAnonymously(auth);
-                
                 let loginAttempts = 0;
                 while (!auth.currentUser && loginAttempts < 50) { 
                     await new Promise(r => setTimeout(r, 100));
                     loginAttempts++;
                 }
-                
                 return !!auth.currentUser;
             } catch (e) {
-                console.error("Force auth failed", e);
-                // Mesej ralat mesra pengguna
-                if (e.code === 'auth/admin-restricted-operation' || e.message.includes('project config')) {
-                    alert("Ralat Auth: Sila aktifkan 'Anonymous Auth' di Firebase Console > Authentication.");
-                } else {
-                    alert("Ralat Sambungan: " + e.message);
-                }
+                console.error("Auth failed", e);
                 return false;
             }
         };
 
         // --- COMPONENT: LOADING SCREEN ---
-        const LoadingScreen = ({ progress, onSkip, errorMsg }) => (
+        const LoadingScreen = ({ progress, onSkip, errorMsg, mode }) => (
             <div className="fixed inset-0 bg-green-700 flex flex-col items-center justify-center z-50 text-white">
-                {errorMsg ? (
-                    <div className="text-center px-4">
-                        <div className="text-red-300 text-5xl mb-4"><i className="ph ph-warning-circle"></i></div>
-                        <h2 className="text-xl font-bold mb-2">Ralat Konfigurasi</h2>
-                        <p className="text-sm bg-red-800 p-4 rounded text-red-100 mb-4 max-w-md mx-auto">{errorMsg}</p>
-                        <p className="text-xs text-green-200">Jika anda guna StackBlitz, sila edit fail index.html dan masukkan firebaseConfig anda.</p>
-                        <button onClick={onSkip} className="mt-6 px-6 py-2 bg-white text-green-800 font-bold rounded shadow hover:bg-gray-100">Teruskan (Mod Offline/UI Sahaja)</button>
+                 <div className="relative mb-8">
+                    <div className="w-24 h-24 border-4 border-green-400 border-t-white rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center font-bold text-xl drop-shadow-md">
+                        {progress}%
                     </div>
-                ) : (
-                    <>
-                        <div className="relative mb-8">
-                            <div className="w-24 h-24 border-4 border-green-400 border-t-white rounded-full animate-spin"></div>
-                            <div className="absolute inset-0 flex items-center justify-center font-bold text-xl drop-shadow-md">
-                                {progress}%
-                            </div>
-                        </div>
-                        <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
-                        <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Menghubungkan ke Awan...</p>
-                        <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
-                            <div className="h-full bg-white loading-bar-transition shadow-lg" style={{ width: `${progress}%` }}></div>
-                        </div>
-                        <button onClick={onSkip} className="mt-8 text-xs font-bold text-green-200 hover:text-white underline hover:no-underline transition-colors opacity-80">
-                            Lambat? Tekan untuk Masuk Segera &gt;&gt;
-                        </button>
-                    </>
-                )}
+                </div>
+                <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
+                <p className="text-green-100 text-sm mb-2 animate-pulse font-medium">
+                    {mode === 'online' ? 'Menghubungkan ke Awan (Online)...' : 'Memulakan Mod Demo (Offline)...'}
+                </p>
+                <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
+                    <div className="h-full bg-white loading-bar-transition shadow-lg" style={{ width: `${progress}%` }}></div>
+                </div>
             </div>
         );
 
         // --- SUB-COMPONENTS ---
-        const Header = ({ userRole, view, setView, isAdmin, onLogout, schoolName, logoUrl, isOnline, currentTeacher }) => (
+        const Header = ({ userRole, view, setView, isAdmin, onLogout, schoolName, logoUrl, isOnline, currentTeacher, isDemo }) => (
             <div className="bg-green-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 no-print">
                 <div className="flex items-center gap-3">
                     {logoUrl ? (
@@ -215,8 +281,8 @@
                         <div className="flex flex-col text-xs text-green-100 opacity-90 mt-1">
                             <span className="font-semibold">{currentTeacher ? `Hi, ${currentTeacher.name}` : (userRole === 'admin' ? 'Panel Pentadbir' : 'Mod Guru')}</span>
                             <span className="flex items-center gap-1" title="Status Sambungan">
-                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-300' : 'bg-yellow-400 animate-pulse'}`}></span>
-                                {isOnline ? 'Online' : 'Menghubungkan...'}
+                                <span className={`w-2 h-2 rounded-full ${isDemo ? 'bg-blue-400' : (isOnline ? 'bg-green-300' : 'bg-yellow-400 animate-pulse')}`}></span>
+                                {isDemo ? 'Mod Demo (Local)' : (isOnline ? 'Online' : 'Menghubungkan...')}
                             </span>
                         </div>
                     </div>
@@ -625,7 +691,7 @@
             const [isFirebaseReady, setIsFirebaseReady] = useState(false);
             const [loadingProgress, setLoadingProgress] = useState(0); 
             const [isLoadingSkipped, setIsLoadingSkipped] = useState(false); 
-            const [firebaseError, setFirebaseError] = useState(null); // Error state for loading screen
+            const [isDemoMode, setIsDemoMode] = useState(false);
 
             const [teachers, setTeachers] = useState([]);
             const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
@@ -648,22 +714,24 @@
             useEffect(() => {
                 const progressTimer = setInterval(() => {
                     setLoadingProgress(prev => {
-                        if (prev >= 90 && !isFirebaseReady) return 90;
+                        if (prev >= 95 && !isFirebaseReady) return 95;
                         if (isFirebaseReady) return 100;
                         return prev + 5; 
                     });
-                }, 50); 
+                }, 20); 
 
                 const checkFirebase = setInterval(() => {
-                    if (window.firebaseOps && window.firebaseOps.auth) {
-                        setIsFirebaseReady(true);
-                        clearInterval(checkFirebase);
-                    } else if (window.firebaseInitError) {
-                        setFirebaseError(window.firebaseInitError);
-                        setIsFirebaseReady(false); // keep false to show error state in loading screen
-                        clearInterval(checkFirebase);
+                    if (window.firebaseOps) {
+                         // Check mode (online/demo)
+                         if (window.firebaseOps.mode === 'demo') setIsDemoMode(true);
+                         
+                         // If demo mode, instant ready. If online, wait for auth module.
+                         if (window.firebaseOps.mode === 'demo' || window.firebaseOps.auth) {
+                            setIsFirebaseReady(true);
+                            clearInterval(checkFirebase);
+                         }
                     }
-                }, 100); 
+                }, 50); 
 
                 return () => {
                     clearInterval(progressTimer);
@@ -671,10 +739,9 @@
                 };
             }, [isFirebaseReady]);
 
-            // --- FIREBASE AUTH (AUTO START) ---
+            // --- FIREBASE AUTH ---
             useEffect(() => {
                 if (!isFirebaseReady) return;
-                
                 if (!window.firebaseOps) return;
 
                 const { auth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } = window.firebaseOps;
@@ -737,12 +804,6 @@
             const handleAttendanceSubmit = async (teacherId, scanType, reason = '') => {
                 if (!teacherId) return;
 
-                // FORCE AUTH CHECK
-                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
-                    const connected = await ensureAuthReady();
-                    if (!connected) return; // ensureAuthReady handles alerts
-                }
-
                 const now = new Date();
                 const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                 
@@ -764,6 +825,7 @@
                         setScanMessage('');
                         setLeaveReason('');
                         setSelectedTeacherId('');
+                        if (scanMode) setView('dashboard');
                     }, 2000);
                 } catch (e) {
                     alert("Ralat menyimpan data: " + e.message);
@@ -778,11 +840,6 @@
             const handleAddTeacher = async () => {
                 if (!newTeacherName.trim()) { alert("Sila masukkan nama guru."); return; }
                 
-                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
-                    const connected = await ensureAuthReady();
-                    if (!connected) return;
-                }
-
                 const { db, collection, addDoc, appId } = window.firebaseOps;
                 
                 try {
@@ -795,19 +852,14 @@
                         reason: ''
                     });
                     setNewTeacherName('');
-                    alert(`Guru berjaya ditambah! Data disinkron secara automatik.`);
+                    alert(`Guru berjaya ditambah!`);
                 } catch (e) {
                     alert("Ralat menambah guru: " + e.message);
                 }
             };
 
             const handleDeleteTeacher = async (id) => {
-                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
-                     const connected = await ensureAuthReady();
-                     if (!connected) return;
-                }
-
-                if (confirm("Adakah anda pasti? Data akan dipadam dari semua peranti.")) {
+                if (confirm("Adakah anda pasti? Data akan dipadam.")) {
                     const { db, doc, deleteDoc, appId } = window.firebaseOps;
                     try {
                         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teachers', id));
@@ -818,18 +870,13 @@
             };
 
             const handleSaveSettings = async () => {
-                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
-                     const connected = await ensureAuthReady();
-                     if (!connected) return;
-                }
-
                 const { db, doc, setDoc, appId } = window.firebaseOps;
                 try {
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), {
                         schoolName,
                         logoUrl
                     });
-                    alert('Tetapan berjaya disimpan ke awan!');
+                    alert('Tetapan berjaya disimpan!');
                 } catch (e) {
                     alert("Ralat menyimpan tetapan: " + e.message);
                 }
@@ -837,10 +884,6 @@
 
             const handleResetDaily = async () => {
                 if(!confirm("Reset semua guru kepada 'Tidak Hadir'?")) return;
-                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
-                     const connected = await ensureAuthReady();
-                     if (!connected) return;
-                }
                 
                 const { db, doc, updateDoc, appId } = window.firebaseOps;
                 
@@ -875,15 +918,11 @@
 
             const handleSkipLoading = () => {
                 setIsLoadingSkipped(true);
-                // Allow UI to render even if firebase isn't ready
                 setIsFirebaseReady(true); 
-                // Attempt connection in background
-                ensureAuthReady();
             };
 
-            // LOADING LOGIC
             if (!isLoadingSkipped && (loadingProgress < 100 || !isFirebaseReady)) {
-                return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} errorMsg={firebaseError} />;
+                return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} mode={isDemoMode ? 'demo' : 'online'} />;
             }
 
             if (!isLoggedIn) return (
@@ -907,6 +946,7 @@
                         logoUrl={logoUrl}
                         isOnline={!!currentUser}
                         currentTeacher={currentTeacher}
+                        isDemo={isDemoMode}
                     />
                     <div className="container mx-auto pb-10 pt-4">
                         {view === 'dashboard' && (
