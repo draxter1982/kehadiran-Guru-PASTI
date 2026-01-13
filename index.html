@@ -23,11 +23,10 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
     <style>
-        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .loading-bar-transition { transition: width 0.2s ease-out; }
         
-        .loading-bar-transition { transition: width 0.5s ease-out; }
-
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
@@ -72,29 +71,31 @@
         const BRANCHES = ['PAH1', 'PAH2', 'PAH3', 'PAH5'];
         const MONTHS = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
 
+        // --- UTILS: SEEDED RANDOM FOR CONSISTENT REPORT ---
+        // Fungsi ini memastikan data laporan nampak sama di semua device walaupun ia dijana secara simulasi
+        const seededRandom = (seed) => {
+            let value = 0;
+            for(let i=0; i<seed.length; i++) value += seed.charCodeAt(i);
+            const x = Math.sin(value) * 10000;
+            return x - Math.floor(x);
+        };
+
         // --- COMPONENT: LOADING SCREEN ---
         const LoadingScreen = ({ progress }) => (
             <div className="fixed inset-0 bg-green-700 flex flex-col items-center justify-center z-50 text-white">
                 <div className="relative mb-6">
-                    <div className="w-20 h-20 border-4 border-green-200 border-t-white rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center font-bold text-sm">
-                        {progress}%
-                    </div>
+                    <div className="w-16 h-16 border-4 border-green-200 border-t-white rounded-full animate-spin"></div>
                 </div>
                 <h1 className="text-2xl font-bold mb-2 tracking-wide">SISTEM PASTI</h1>
-                <p className="text-green-100 text-sm mb-6 animate-pulse">Menghubungkan ke Pangkalan Data...</p>
-                
+                <p className="text-green-100 text-sm mb-6 animate-pulse">Menyelaraskan Data...</p>
                 <div className="w-64 h-2 bg-green-900 rounded-full overflow-hidden">
-                    <div 
-                        className="h-full bg-white loading-bar-transition" 
-                        style={{ width: `${progress}%` }}
-                    ></div>
+                    <div className="h-full bg-white loading-bar-transition" style={{ width: `${progress}%` }}></div>
                 </div>
             </div>
         );
 
         // --- SUB-COMPONENTS ---
-        const Header = ({ userRole, view, setView, isAdmin, onLogout, schoolName, logoUrl }) => (
+        const Header = ({ userRole, view, setView, isAdmin, onLogout, schoolName, logoUrl, isOnline }) => (
             <div className="bg-green-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 no-print">
                 <div className="flex items-center gap-3">
                     {logoUrl ? (
@@ -104,21 +105,27 @@
                     )}
                     <div>
                         <h1 className="text-xl font-bold leading-none uppercase">{schoolName || 'PASTI'}</h1>
-                        <p className="text-xs text-green-100 opacity-90">{userRole === 'admin' ? 'Mod Pentadbir (Online)' : 'Mod Guru (Online)'}</p>
+                        <div className="flex items-center gap-2 text-xs text-green-100 opacity-90">
+                            <span>{userRole === 'admin' ? 'Pentadbir' : 'Guru'}</span>
+                            <span className="flex items-center gap-1 bg-green-800 px-1.5 rounded-full" title="Status Sambungan">
+                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-500'}`}></span>
+                                {isOnline ? 'Online' : 'Offline'}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => setView('dashboard')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'dashboard' ? 'bg-white text-green-700' : 'bg-green-700'}`}>Utama</button>
-                    <button onClick={() => setView('scan')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'scan' ? 'bg-white text-green-700' : 'bg-green-700'}`}>Scan QR</button>
+                    <button onClick={() => setView('scan')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'scan' ? 'bg-white text-green-700' : 'bg-green-700'}`}>Scan</button>
                     
                     {isAdmin && (
                         <button onClick={() => setView('admin')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'admin' ? 'bg-white text-green-700' : 'bg-green-700 border border-green-400'}`}>
-                            <i className="ph ph-gear-six"></i> Panel Admin
+                            Admin
                         </button>
                     )}
                     
                     <button onClick={onLogout} className="ml-2 px-3 py-1 rounded text-sm font-bold bg-red-600 hover:bg-red-700 flex items-center gap-1">
-                        <i className="ph ph-sign-out"></i> Keluar
+                        <i className="ph ph-sign-out"></i>
                     </button>
                 </div>
             </div>
@@ -129,13 +136,9 @@
             const [pass, setPass] = useState('');
 
             const loginGuru = () => onLogin('guru');
-            
             const loginAdmin = () => {
-                if (pass === 'admin123') {
-                    onLogin('admin');
-                } else {
-                    alert('Kata laluan salah!');
-                }
+                if (pass === 'admin123') onLogin('admin');
+                else alert('Kata laluan salah!');
             };
 
             return (
@@ -143,41 +146,26 @@
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
                         <div className="bg-green-600 p-8 text-center">
                             <div className="inline-block p-4 bg-white rounded-full text-green-600 mb-4 shadow-lg">
-                                {logoUrl ? (
-                                    <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain" />
-                                ) : (
-                                    <i className="ph ph-user-circle text-5xl"></i>
-                                )}
+                                {logoUrl ? <img src={logoUrl} className="w-16 h-16 object-contain" /> : <i className="ph ph-user-circle text-5xl"></i>}
                             </div>
                             <h1 className="text-2xl font-bold text-white">Sistem Kehadiran</h1>
                             <p className="text-green-100 opacity-90 uppercase">{schoolName || 'PASTI'}</p>
                         </div>
-                        
                         <div className="p-8 space-y-6">
                             {!showPass ? (
                                 <>
-                                    <p className="text-center text-gray-500 mb-4">Sila pilih jenis akaun untuk log masuk:</p>
-                                    <button onClick={loginGuru} className="w-full py-4 bg-blue-50 border-2 border-blue-100 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-all flex items-center justify-center gap-3 group">
-                                        <i className="ph ph-chalkboard-teacher text-2xl text-blue-600 group-hover:scale-110 transition-transform"></i>
-                                        <span className="text-lg font-bold text-blue-800">Log Masuk GURU</span>
+                                    <p className="text-center text-gray-500 mb-4">Sila pilih akses:</p>
+                                    <button onClick={loginGuru} className="w-full py-4 bg-blue-50 border-2 border-blue-100 rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center gap-3 group">
+                                        <i className="ph ph-chalkboard-teacher text-2xl text-blue-600"></i><span className="text-lg font-bold text-blue-800">Log Masuk GURU</span>
                                     </button>
-                                    
-                                    <button onClick={() => setShowPass(true)} className="w-full py-4 bg-gray-50 border-2 border-gray-100 rounded-xl hover:bg-gray-100 hover:border-gray-300 transition-all flex items-center justify-center gap-3 group">
-                                        <i className="ph ph-lock-key text-2xl text-gray-600 group-hover:scale-110 transition-transform"></i>
-                                        <span className="text-lg font-bold text-gray-800">Log Masuk PENTADBIR</span>
+                                    <button onClick={() => setShowPass(true)} className="w-full py-4 bg-gray-50 border-2 border-gray-100 rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 group">
+                                        <i className="ph ph-lock-key text-2xl text-gray-600"></i><span className="text-lg font-bold text-gray-800">Log Masuk PENTADBIR</span>
                                     </button>
                                 </>
                             ) : (
                                 <div className="animate-fade-in">
                                     <h3 className="text-center font-bold text-gray-800 mb-4 text-lg">Akses Pentadbir</h3>
-                                    <input 
-                                        type="password" 
-                                        className="w-full p-3 border-2 border-gray-200 rounded-lg mb-4 text-center focus:border-green-500 focus:outline-none"
-                                        placeholder="Masukkan Kata Laluan"
-                                        value={pass}
-                                        onChange={(e) => setPass(e.target.value)}
-                                        autoFocus
-                                    />
+                                    <input type="password" className="w-full p-3 border-2 border-gray-200 rounded-lg mb-4 text-center focus:border-green-500 focus:outline-none" placeholder="Masukkan Kata Laluan" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus />
                                     <button onClick={loginAdmin} className="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-md mb-3">Sahkan</button>
                                     <button onClick={() => {setShowPass(false); setPass('');}} className="w-full py-2 text-gray-500 text-sm hover:underline">Kembali</button>
                                 </div>
@@ -226,9 +214,7 @@
 
                     <div className="bg-white p-4 rounded-lg shadow">
                         <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-2">
-                            <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-                                <i className="ph ph-chart-bar text-xl"></i> Statistik Harian
-                            </h3>
+                            <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2"><i className="ph ph-chart-bar text-xl"></i> Statistik Harian</h3>
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border">
                                 <i className="ph ph-calendar text-green-600"></i> <span>{dateString}</span>
                             </div>
@@ -247,7 +233,7 @@
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <div className="text-gray-500 text-sm">Graf sedang dimuatkan atau gagal dimuatkan...</div>
+                                <div className="text-gray-500 text-sm">Graf sedang dimuatkan...</div>
                             )}
                         </div>
                     </div>
@@ -255,7 +241,7 @@
                     <div className="bg-white rounded-lg shadow overflow-hidden">
                         <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
                             <h3 className="font-bold text-gray-700">Senarai Kehadiran Penuh</h3>
-                            <div className="text-xs text-gray-400 italic">Dikemaskini serta-merta</div>
+                            <div className="text-xs text-gray-400 italic">Data dikemaskini secara masa nyata (Real-time)</div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
@@ -289,7 +275,7 @@
                                         );
                                     })}
                                     {teachers.length === 0 && (
-                                        <tr><td colSpan="6" className="text-center py-4 text-gray-500">Tiada data guru. Sila tambah guru di Panel Admin.</td></tr>
+                                        <tr><td colSpan="6" className="text-center py-4 text-gray-500">Tiada data guru.</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -299,99 +285,120 @@
             );
         };
 
-        const ScanView = ({ scanMode, setScanMode, teachers, selectedTeacherId, setSelectedTeacherId, leaveReason, setLeaveReason, scanMessage, handleAttendanceSubmit, handlePrint, isPrinting, schoolName }) => (
-            <div className="p-4 md:p-8 max-w-6xl mx-auto">
-                <div className={`bg-white rounded-xl shadow-lg p-6 md:p-10 text-center space-y-8 no-print ${isPrinting ? 'hidden' : ''}`}>
-                    {!scanMode ? (
-                        <>
-                            <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-6">
-                                <div className="text-left">
-                                    <h2 className="text-3xl font-bold text-gray-800">Sila Imbas QR</h2>
-                                    <p className="text-gray-500">Pilih kod QR yang sesuai untuk aktiviti anda</p>
+        const ScanView = ({ scanMode, setScanMode, teachers, selectedTeacherId, setSelectedTeacherId, leaveReason, setLeaveReason, scanMessage, handleAttendanceSubmit, handlePrint, isPrinting, schoolName }) => {
+            const handleTeacherChange = (e) => {
+                const newId = e.target.value;
+                setSelectedTeacherId(newId);
+                if (newId && (scanMode === 'clock_in' || scanMode === 'clock_out')) {
+                    handleAttendanceSubmit(newId);
+                }
+            };
+
+            return (
+                <div className="p-4 md:p-8 max-w-6xl mx-auto">
+                    <div className={`bg-white rounded-xl shadow-lg p-6 md:p-10 text-center space-y-8 no-print ${isPrinting ? 'hidden' : ''}`}>
+                        {!scanMode ? (
+                            <>
+                                <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-6">
+                                    <div className="text-left">
+                                        <h2 className="text-3xl font-bold text-gray-800">Sila Imbas QR</h2>
+                                        <p className="text-gray-500">Pilih kod QR yang sesuai untuk aktiviti anda</p>
+                                    </div>
+                                    <button onClick={handlePrint} className="flex items-center gap-2 bg-gray-800 text-white px-5 py-3 rounded-lg shadow hover:bg-gray-900 transition-all">
+                                        <i className="ph ph-printer text-xl"></i> Cetak QR
+                                    </button>
                                 </div>
-                                <button onClick={handlePrint} className="flex items-center gap-2 bg-gray-800 text-white px-5 py-3 rounded-lg shadow hover:bg-gray-900 transition-all">
-                                    <i className="ph ph-printer text-xl"></i> Cetak Kod QR
-                                </button>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+                                    <div onClick={() => setScanMode('clock_in')} className="cursor-pointer bg-white border-2 border-blue-100 rounded-2xl p-6 hover:shadow-2xl hover:border-blue-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_IN&color=1d4ed8" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-blue-900 mb-2">QR MASUK</h3>
+                                        <div className="flex items-center justify-center gap-2 text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-sign-in"></i> Datang</div>
+                                    </div>
+                                    <div onClick={() => setScanMode('clock_out')} className="cursor-pointer bg-white border-2 border-rose-100 rounded-2xl p-6 hover:shadow-2xl hover:border-rose-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_OUT&color=be123c" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-rose-900 mb-2">QR BALIK</h3>
+                                        <div className="flex items-center justify-center gap-2 text-rose-600 bg-rose-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-sign-out"></i> Pulang</div>
+                                    </div>
+                                    <div onClick={() => setScanMode('outstation')} className="cursor-pointer bg-white border-2 border-purple-100 rounded-2xl p-6 hover:shadow-2xl hover:border-purple-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_OUTSTATION&color=7e22ce" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-purple-900 mb-2">TUGAS LUAR</h3>
+                                        <div className="flex items-center justify-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-briefcase"></i> Kursus</div>
+                                    </div>
+                                    <div onClick={() => setScanMode('leave')} className="cursor-pointer bg-white border-2 border-orange-100 rounded-2xl p-6 hover:shadow-2xl hover:border-orange-500 transition-all">
+                                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_LEAVE&color=c2410c" className="w-28 h-28 mx-auto mb-4" />
+                                        <h3 className="text-xl font-bold text-orange-900 mb-2">CUTI / MC</h3>
+                                        <div className="flex items-center justify-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-calendar-x"></i> Cuti</div>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="max-w-md mx-auto text-left animate-fade-in py-8">
+                                <div className="flex items-center gap-3 mb-6 pb-4 border-b">
+                                    <div className="p-3 bg-gray-100 rounded-full"><i className="ph ph-scan text-2xl text-gray-600"></i></div>
+                                    <div>
+                                        <h3 className="font-bold text-xl text-gray-800">
+                                            {scanMode === 'clock_in' ? 'Rekod Kehadiran (Masuk)' : 
+                                             scanMode === 'clock_out' ? 'Rekod Pulang (Balik)' : 'Rekod Cuti/Luar'}
+                                        </h3>
+                                        <button onClick={() => { setScanMode(null); }} className="text-sm text-gray-500 underline">Kembali</button>
+                                    </div>
+                                </div>
+                                <div className="space-y-4 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                                    <label className="block text-sm font-bold text-gray-700">Simulasi: Pilih ID Guru</label>
+                                    <select className="w-full p-3 border rounded-lg bg-white" value={selectedTeacherId} onChange={handleTeacherChange}>
+                                        <option value="">-- Sila Scan/Pilih ID --</option>
+                                        {teachers.map(t => <option key={t.id} value={t.id}>{t.name} - {t.branch}</option>)}
+                                    </select>
+                                    
+                                    {(scanMode === 'leave' || scanMode === 'outstation') && (
+                                        <div className="animate-fade-in">
+                                            <textarea className="w-full p-3 border rounded-lg mb-3" rows="3" placeholder="Nyatakan sebab/lokasi..." value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)}></textarea>
+                                            <button onClick={() => handleAttendanceSubmit(selectedTeacherId)} disabled={!selectedTeacherId} className={`w-full py-3 rounded-lg font-bold text-white ${selectedTeacherId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300'}`}>Sahkan & Hantar</button>
+                                        </div>
+                                    )}
+
+                                    {(scanMode === 'clock_in' || scanMode === 'clock_out') && (
+                                        <p className="text-center text-sm text-gray-500 italic mt-2">Data akan dihantar secara automatik apabila nama dipilih.</p>
+                                    )}
+
+                                    {scanMessage && <div className="p-3 bg-green-100 text-green-700 rounded-lg text-center font-bold mt-2 animate-bounce">{scanMessage}</div>}
+                                </div>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
-                                <div onClick={() => setScanMode('clock_in')} className="cursor-pointer bg-white border-2 border-blue-100 rounded-2xl p-6 hover:shadow-2xl hover:border-blue-500 transition-all">
-                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_IN&color=1d4ed8" className="w-28 h-28 mx-auto mb-4" />
-                                    <h3 className="text-xl font-bold text-blue-900 mb-2">QR MASUK</h3>
-                                    <div className="flex items-center justify-center gap-2 text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-sign-in"></i> Datang</div>
-                                </div>
-                                <div onClick={() => setScanMode('clock_out')} className="cursor-pointer bg-white border-2 border-rose-100 rounded-2xl p-6 hover:shadow-2xl hover:border-rose-500 transition-all">
-                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_CLOCK_OUT&color=be123c" className="w-28 h-28 mx-auto mb-4" />
-                                    <h3 className="text-xl font-bold text-rose-900 mb-2">QR BALIK</h3>
-                                    <div className="flex items-center justify-center gap-2 text-rose-600 bg-rose-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-sign-out"></i> Pulang</div>
-                                </div>
-                                <div onClick={() => setScanMode('outstation')} className="cursor-pointer bg-white border-2 border-purple-100 rounded-2xl p-6 hover:shadow-2xl hover:border-purple-500 transition-all">
-                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_OUTSTATION&color=7e22ce" className="w-28 h-28 mx-auto mb-4" />
-                                    <h3 className="text-xl font-bold text-purple-900 mb-2">TUGAS LUAR</h3>
-                                    <div className="flex items-center justify-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-briefcase"></i> Kursus</div>
-                                </div>
-                                <div onClick={() => setScanMode('leave')} className="cursor-pointer bg-white border-2 border-orange-100 rounded-2xl p-6 hover:shadow-2xl hover:border-orange-500 transition-all">
-                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PASTI_LEAVE&color=c2410c" className="w-28 h-28 mx-auto mb-4" />
-                                    <h3 className="text-xl font-bold text-orange-900 mb-2">CUTI / MC</h3>
-                                    <div className="flex items-center justify-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full text-sm font-semibold"><i className="ph ph-calendar-x"></i> Cuti</div>
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="max-w-md mx-auto text-left animate-fade-in py-8">
-                            <div className="flex items-center gap-3 mb-6 pb-4 border-b">
-                                <div className="p-3 bg-gray-100 rounded-full"><i className="ph ph-scan text-2xl text-gray-600"></i></div>
-                                <div>
-                                    <h3 className="font-bold text-xl text-gray-800">Mod Imbasan Aktif</h3>
-                                    <button onClick={() => { setScanMode(null); }} className="text-sm text-gray-500 underline">Kembali</button>
-                                </div>
-                            </div>
-                            <div className="space-y-4 bg-gray-50 p-6 rounded-lg border border-gray-200">
-                                <label className="block text-sm font-bold text-gray-700">Simulasi: Pilih ID Guru</label>
-                                <select className="w-full p-3 border rounded-lg bg-white" value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(e.target.value)}>
-                                    <option value="">-- Sila Scan/Pilih ID --</option>
-                                    {teachers.map(t => <option key={t.id} value={t.id}>{t.name} - {t.branch}</option>)}
-                                </select>
-                                {(scanMode === 'leave' || scanMode === 'outstation') && (
-                                    <textarea className="w-full p-3 border rounded-lg" rows="3" placeholder="Nyatakan sebab/lokasi..." value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)}></textarea>
-                                )}
-                                <button onClick={handleAttendanceSubmit} disabled={!selectedTeacherId} className={`w-full py-3 rounded-lg font-bold text-white ${selectedTeacherId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300'}`}>{scanMessage ? 'Disimpan!' : 'Sahkan & Hantar'}</button>
-                                {scanMessage && <div className="p-3 bg-green-100 text-green-700 rounded-lg text-center font-bold mt-2">{scanMessage}</div>}
-                            </div>
-                        </div>
-                    )}
-                </div>
-                
-                {/* PRINT LAYOUT */}
-                <div className={`print-only ${isPrinting ? 'block' : 'hidden'} bg-white p-8 w-full`}>
-                    <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
-                        <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN {schoolName}</h1>
-                        <p className="text-xl text-gray-600">PAH1 | PAH2 | PAH3 | PAH5</p>
+                        )}
                     </div>
-                    <div className="grid grid-cols-2 gap-8 text-center">
-                        <div className="border-4 border-blue-600 rounded-2xl p-6 flex flex-col items-center">
-                            <h2 className="text-3xl font-extrabold text-blue-800 mb-2">QR MASUK</h2>
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_CLOCK_IN" className="w-40 h-40 border-2 mb-4" />
-                            <p className="text-xl font-bold">REKOD DATANG</p>
+                    
+                    {/* PRINT LAYOUT */}
+                    <div className={`print-only ${isPrinting ? 'block' : 'hidden'} bg-white p-8 w-full`}>
+                        <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
+                            <h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN {schoolName}</h1>
+                            <p className="text-xl text-gray-600">PAH1 | PAH2 | PAH3 | PAH5</p>
                         </div>
-                        <div className="border-4 border-rose-600 rounded-2xl p-6 flex flex-col items-center">
-                            <h2 className="text-3xl font-extrabold text-rose-800 mb-2">QR BALIK</h2>
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_CLOCK_OUT" className="w-40 h-40 border-2 mb-4" />
-                            <p className="text-xl font-bold">REKOD PULANG</p>
-                        </div>
-                            <div className="border-4 border-purple-600 rounded-2xl p-6 flex flex-col items-center">
-                            <h2 className="text-3xl font-extrabold text-purple-800 mb-2">TUGAS LUAR</h2>
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_OUTSTATION" className="w-40 h-40 border-2 mb-4" />
-                            <p className="text-xl font-bold">KURSUS</p>
-                        </div>
-                        <div className="border-4 border-orange-600 rounded-2xl p-6 flex flex-col items-center">
-                            <h2 className="text-3xl font-extrabold text-orange-800 mb-2">CUTI / MC</h2>
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_LEAVE" className="w-40 h-40 border-2 mb-4" />
-                            <p className="text-xl font-bold">TIDAK HADIR</p>
+                        <div className="grid grid-cols-2 gap-8 text-center">
+                            <div className="border-4 border-blue-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-blue-800 mb-2">QR MASUK</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_CLOCK_IN" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">REKOD DATANG</p>
+                            </div>
+                            <div className="border-4 border-rose-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-rose-800 mb-2">QR BALIK</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_CLOCK_OUT" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">REKOD PULANG</p>
+                            </div>
+                                <div className="border-4 border-purple-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-purple-800 mb-2">TUGAS LUAR</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_OUTSTATION" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">KURSUS</p>
+                            </div>
+                            <div className="border-4 border-orange-600 rounded-2xl p-6 flex flex-col items-center">
+                                <h2 className="text-3xl font-extrabold text-orange-800 mb-2">CUTI / MC</h2>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PASTI_LEAVE" className="w-40 h-40 border-2 mb-4" />
+                                <p className="text-xl font-bold">TIDAK HADIR</p>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        );
+            );
+        };
 
         const AdminView = ({ 
             isAdmin, adminTab, setAdminTab, 
@@ -411,7 +418,7 @@
             const [selectedBranchFilter, setSelectedBranchFilter] = useState('Semua');
             const [selectedTeacherFilter, setSelectedTeacherFilter] = useState('Semua');
 
-            // Generate report data on the fly (mocking for now since we don't have historical DB yet)
+            // Generate report data on the fly (mocking with consistent random)
             const generateReportData = (month, branchFilter, teacherFilter, teachersList) => {
                 const daysInMonth = 20; 
                 let reportData = [];
@@ -422,10 +429,14 @@
                         if (teacherFilter !== 'Semua' && teacher.name !== teacherFilter) return;
 
                         for (let i = 1; i <= daysInMonth; i++) {
-                            const statusRandom = Math.random();
+                            // Gunakan nama + tarikh sebagai benih (seed) untuk random
+                            // Ini memastikan "fake data" sentiasa sama di semua device (tally)
+                            const seed = teacher.name + i + month;
+                            const statusRandom = seededRandom(seed);
+                            
                             let status = 'Hadir';
-                            let timeIn = `07:${Math.floor(Math.random() * 59).toString().padStart(2, '0')}`;
-                            let timeOut = `13:${Math.floor(Math.random() * 30).toString().padStart(2, '0')}`;
+                            let timeIn = `07:${Math.floor(seededRandom(seed + 'in') * 59).toString().padStart(2, '0')}`;
+                            let timeOut = `13:${Math.floor(seededRandom(seed + 'out') * 30).toString().padStart(2, '0')}`;
                             
                             if (statusRandom > 0.9) { status = 'Cuti'; timeIn = '--:--'; timeOut = '--:--'; }
                             else if (statusRandom > 0.95) { status = 'Tidak Hadir'; timeIn = '--:--'; timeOut = '--:--'; }
@@ -719,7 +730,7 @@
             const [userRole, setUserRole] = useState(null); 
             const [currentUser, setCurrentUser] = useState(null);
             const [isFirebaseReady, setIsFirebaseReady] = useState(false);
-            const [loadingProgress, setLoadingProgress] = useState(0); // STATE UNTUK ANIMASI %
+            const [loadingProgress, setLoadingProgress] = useState(0); 
 
             const [teachers, setTeachers] = useState([]);
             const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
@@ -740,18 +751,14 @@
 
             // --- ANIMATION & FIREBASE INIT WAIT ---
             useEffect(() => {
-                // Timer untuk animasi progress bar (Naik sedikit demi sedikit)
                 const progressTimer = setInterval(() => {
                     setLoadingProgress(prev => {
-                        // Jika firebase belum ready, jangan lebih 90%
                         if (prev >= 90 && !isFirebaseReady) return 90;
-                        // Jika firebase ready, biarkan naik ke 100
                         if (isFirebaseReady) return 100;
-                        return prev + 2; // Kelajuan loading
+                        return prev + 2; 
                     });
                 }, 50);
 
-                // Check Firebase readiness
                 const checkFirebase = setInterval(() => {
                     if (window.firebaseOps && window.firebaseOps.auth) {
                         setIsFirebaseReady(true);
@@ -822,13 +829,15 @@
 
             // --- ACTIONS ---
             
-            const handleAttendanceSubmit = async () => {
-                if (!selectedTeacherId) return;
+            const handleAttendanceSubmit = async (autoSubmitId = null) => {
+                const targetId = autoSubmitId || selectedTeacherId;
+                if (!targetId) return;
+
                 const now = new Date();
                 const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                 
                 const { db, doc, updateDoc, appId } = window.firebaseOps;
-                const teacherRef = doc(db, 'artifacts', appId, 'public', 'data', 'teachers', selectedTeacherId);
+                const teacherRef = doc(db, 'artifacts', appId, 'public', 'data', 'teachers', targetId);
 
                 let updateData = {};
                 if (scanMode === 'clock_in') updateData = { status: 'Hadir', timeIn: timeString, reason: '' };
@@ -843,7 +852,9 @@
                         setScanMessage('');
                         setLeaveReason('');
                         setSelectedTeacherId('');
-                        setView('dashboard');
+                        if (!autoSubmitId) { 
+                             setView('dashboard');
+                        }
                     }, 2000);
                 } catch (e) {
                     alert("Ralat menyimpan data: " + e.message);
@@ -932,7 +943,6 @@
                 setView('dashboard');
             };
 
-            // PAPAR LOADING JIKA PROGRESS BELUM 100 ATAU FIREBASE BELUM READY
             if (loadingProgress < 100 || !isFirebaseReady) {
                 return <LoadingScreen progress={loadingProgress} />;
             }
@@ -955,6 +965,7 @@
                         onLogout={handleLogout}
                         schoolName={schoolName}
                         logoUrl={logoUrl}
+                        isOnline={!!currentUser}
                     />
                     <div className="container mx-auto pb-10 pt-4">
                         {view === 'dashboard' && (
@@ -985,7 +996,6 @@
                                 adminTab={adminTab} 
                                 setAdminTab={setAdminTab} 
                                 teachers={teachers} 
-                                setTeachers={setTeachers} 
                                 newTeacherName={newTeacherName} 
                                 setNewTeacherName={setNewTeacherName} 
                                 newTeacherBranch={newTeacherBranch} 
