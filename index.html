@@ -92,17 +92,28 @@
             return x - Math.floor(x);
         };
 
-        // --- HELPER: FORCE AUTH CHECK ---
+        // --- HELPER: FORCE AUTH CHECK (AUTO-CONNECT) ---
+        // Fungsi ini akan mencuba menyambung secara automatik jika terputus
         const ensureAuthReady = async () => {
+            // Tunggu sehingga firebaseOps dimuatkan (maksimum 5 saat)
+            let attempts = 0;
+            while (!window.firebaseOps && attempts < 20) {
+                await new Promise(r => setTimeout(r, 250));
+                attempts++;
+            }
+
             if (!window.firebaseOps) return false;
+
             const { auth, signInAnonymously } = window.firebaseOps;
+            
+            // Jika belum login, paksa login sekarang
             if (!auth.currentUser) {
                 try {
-                    console.log("Forcing anonymous sign in...");
+                    console.log("Menghubungkan semula ke pangkalan data...");
                     await signInAnonymously(auth);
                     return true;
                 } catch (e) {
-                    console.error("Force auth failed", e);
+                    console.error("Gagal menyambung:", e);
                     return false;
                 }
             }
@@ -119,7 +130,7 @@
                     </div>
                 </div>
                 <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
-                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Menghubungkan ke Awan...</p>
+                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Memulakan Sistem...</p>
                 <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
                     <div className="h-full bg-white loading-bar-transition shadow-lg" style={{ width: `${progress}%` }}></div>
                 </div>
