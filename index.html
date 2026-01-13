@@ -54,18 +54,24 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        try {
+            const firebaseConfig = JSON.parse(__firebase_config);
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        window.firebaseOps = { 
-            auth, db, appId,
-            signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
-            collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot 
-        };
-        console.log("Firebase initialized");
+            window.firebaseOps = { 
+                auth, db, appId,
+                signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+                collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot 
+            };
+            console.log("Firebase initialized successfully");
+        } catch (error) {
+            console.error("Firebase init failed:", error);
+            // Fallback object to prevent immediate crash, though functionality will be limited
+            window.firebaseOps = null; 
+        }
     </script>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans">
@@ -92,17 +98,18 @@
             return x - Math.floor(x);
         };
 
-        // --- HELPER: ROBUST AUTH CHECK ---
+        // --- HELPER: ROBUST AUTH CHECK (AUTO-CONNECT) ---
+        // Fungsi ini akan mencuba menyambung secara automatik jika terputus
         const ensureAuthReady = async () => {
-            // 1. Tunggu modul Firebase dimuatkan (Max 5 saat)
+            // 1. Tunggu modul Firebase dimuatkan (Max 10 saat)
             let attempts = 0;
-            while (!window.firebaseOps && attempts < 50) {
+            while (!window.firebaseOps && attempts < 100) {
                 await new Promise(r => setTimeout(r, 100));
                 attempts++;
             }
 
             if (!window.firebaseOps) {
-                console.error("Firebase module missing");
+                console.error("Firebase module missing or failed to init");
                 return false;
             }
 
@@ -113,12 +120,12 @@
 
             // 3. Jika tiada user, cuba log masuk paksa (Force Login)
             try {
-                console.log("Mencuba sambungan paksa...");
+                console.log("Mencuba sambungan paksa (Auto-Retry)...");
                 await signInAnonymously(auth);
                 
                 // Tunggu sekejap untuk state update
                 let loginAttempts = 0;
-                while (!auth.currentUser && loginAttempts < 20) {
+                while (!auth.currentUser && loginAttempts < 50) { // Wait up to 5s
                     await new Promise(r => setTimeout(r, 100));
                     loginAttempts++;
                 }
@@ -725,6 +732,7 @@
             const handleAddTeacher = async () => {
                 if (!newTeacherName.trim()) { alert("Sila masukkan nama guru."); return; }
                 
+                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                     const connected = await ensureAuthReady();
                     if (!connected) { alert("Sistem belum bersedia."); return; }
@@ -749,6 +757,7 @@
             };
 
             const handleDeleteTeacher = async (id) => {
+                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                      const connected = await ensureAuthReady();
                      if (!connected) return;
@@ -765,6 +774,7 @@
             };
 
             const handleSaveSettings = async () => {
+                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                      const connected = await ensureAuthReady();
                      if (!connected) return;
@@ -784,6 +794,7 @@
 
             const handleResetDaily = async () => {
                 if(!confirm("Reset semua guru kepada 'Tidak Hadir'?")) return;
+                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                      const connected = await ensureAuthReady();
                      if (!connected) return;
@@ -823,6 +834,8 @@
             const handleSkipLoading = () => {
                 setIsLoadingSkipped(true);
                 setIsFirebaseReady(true); 
+                // Try connecting in background
+                ensureAuthReady();
             };
 
             if (!isLoadingSkipped && (loadingProgress < 100 || !isFirebaseReady)) {
