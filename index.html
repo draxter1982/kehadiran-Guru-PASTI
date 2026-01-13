@@ -54,23 +54,49 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- KONFIGURASI FIREBASE ---
+        // Jika anda guna StackBlitz, ganti bahagian ini dengan config dari Firebase Console anda!
+        let firebaseConfig;
         try {
-            const firebaseConfig = JSON.parse(__firebase_config);
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const db = getFirestore(app);
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // Cuba ambil dari environment (jika dalam preview ini)
+            if (typeof __firebase_config !== 'undefined') {
+                firebaseConfig = JSON.parse(__firebase_config);
+            } else {
+                // JIKA DI STACKBLITZ/LOCAL: Masukkan config anda di sini
+                // Contoh:
+                // firebaseConfig = {
+                //   apiKey: "AIzaSy...",
+                //   authDomain: "pasti-app.firebaseapp.com",
+                //   projectId: "pasti-app",
+                //   storageBucket: "pasti-app.firebasestorage.app",
+                //   messagingSenderId: "...",
+                //   appId: "..."
+                // };
+                console.warn("Tiada konfigurasi Firebase ditemui. Sila masukkan config manual.");
+            }
+        } catch (e) {
+            console.error("Ralat parsing config:", e);
+        }
 
-            window.firebaseOps = { 
-                auth, db, appId,
-                signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
-                collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot 
-            };
-            console.log("Firebase initialized successfully");
-        } catch (error) {
-            console.error("Firebase init failed:", error);
-            // Fallback object to prevent immediate crash, though functionality will be limited
-            window.firebaseOps = null; 
+        if (firebaseConfig) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                const db = getFirestore(app);
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+                window.firebaseOps = { 
+                    auth, db, appId,
+                    signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+                    collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot 
+                };
+                console.log("Firebase initialized successfully");
+            } catch (error) {
+                console.error("Firebase init failed:", error);
+                window.firebaseInitError = error.message;
+            }
+        } else {
+            window.firebaseInitError = "Konfigurasi Firebase Hilang (Sila edit kod)";
         }
     </script>
 </head>
@@ -99,33 +125,33 @@
         };
 
         // --- HELPER: ROBUST AUTH CHECK (AUTO-CONNECT) ---
-        // Fungsi ini akan mencuba menyambung secara automatik jika terputus
         const ensureAuthReady = async () => {
-            // 1. Tunggu modul Firebase dimuatkan (Max 10 saat)
+            // 1. Tunggu modul Firebase dimuatkan
             let attempts = 0;
-            while (!window.firebaseOps && attempts < 100) {
+            while (!window.firebaseOps && attempts < 50) {
+                if (window.firebaseInitError) {
+                    alert("Ralat Inisialisasi Firebase: " + window.firebaseInitError + "\n\nSila periksa kod (bahagian <script type='module'>) dan masukkan config Firebase anda.");
+                    return false;
+                }
                 await new Promise(r => setTimeout(r, 100));
                 attempts++;
             }
 
             if (!window.firebaseOps) {
-                console.error("Firebase module missing or failed to init");
+                alert("Modul Firebase gagal dimuatkan. Sila refresh.");
                 return false;
             }
 
             const { auth, signInAnonymously } = window.firebaseOps;
             
-            // 2. Jika sudah ada user, return true
             if (auth.currentUser) return true;
 
-            // 3. Jika tiada user, cuba log masuk paksa (Force Login)
             try {
-                console.log("Mencuba sambungan paksa (Auto-Retry)...");
+                // console.log("Mencuba sambungan paksa (Auto-Retry)...");
                 await signInAnonymously(auth);
                 
-                // Tunggu sekejap untuk state update
                 let loginAttempts = 0;
-                while (!auth.currentUser && loginAttempts < 50) { // Wait up to 5s
+                while (!auth.currentUser && loginAttempts < 50) { 
                     await new Promise(r => setTimeout(r, 100));
                     loginAttempts++;
                 }
@@ -133,27 +159,45 @@
                 return !!auth.currentUser;
             } catch (e) {
                 console.error("Force auth failed", e);
+                // Mesej ralat mesra pengguna
+                if (e.code === 'auth/admin-restricted-operation' || e.message.includes('project config')) {
+                    alert("Ralat Auth: Sila aktifkan 'Anonymous Auth' di Firebase Console > Authentication.");
+                } else {
+                    alert("Ralat Sambungan: " + e.message);
+                }
                 return false;
             }
         };
 
         // --- COMPONENT: LOADING SCREEN ---
-        const LoadingScreen = ({ progress, onSkip }) => (
+        const LoadingScreen = ({ progress, onSkip, errorMsg }) => (
             <div className="fixed inset-0 bg-green-700 flex flex-col items-center justify-center z-50 text-white">
-                <div className="relative mb-8">
-                    <div className="w-24 h-24 border-4 border-green-400 border-t-white rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center font-bold text-xl drop-shadow-md">
-                        {progress}%
+                {errorMsg ? (
+                    <div className="text-center px-4">
+                        <div className="text-red-300 text-5xl mb-4"><i className="ph ph-warning-circle"></i></div>
+                        <h2 className="text-xl font-bold mb-2">Ralat Konfigurasi</h2>
+                        <p className="text-sm bg-red-800 p-4 rounded text-red-100 mb-4 max-w-md mx-auto">{errorMsg}</p>
+                        <p className="text-xs text-green-200">Jika anda guna StackBlitz, sila edit fail index.html dan masukkan firebaseConfig anda.</p>
+                        <button onClick={onSkip} className="mt-6 px-6 py-2 bg-white text-green-800 font-bold rounded shadow hover:bg-gray-100">Teruskan (Mod Offline/UI Sahaja)</button>
                     </div>
-                </div>
-                <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
-                <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Menghubungkan ke Awan...</p>
-                <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
-                    <div className="h-full bg-white loading-bar-transition shadow-lg" style={{ width: `${progress}%` }}></div>
-                </div>
-                <button onClick={onSkip} className="mt-8 text-xs font-bold text-green-200 hover:text-white underline hover:no-underline transition-colors opacity-80">
-                    Lambat? Tekan untuk Masuk Segera &gt;&gt;
-                </button>
+                ) : (
+                    <>
+                        <div className="relative mb-8">
+                            <div className="w-24 h-24 border-4 border-green-400 border-t-white rounded-full animate-spin"></div>
+                            <div className="absolute inset-0 flex items-center justify-center font-bold text-xl drop-shadow-md">
+                                {progress}%
+                            </div>
+                        </div>
+                        <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
+                        <p className="text-green-100 text-sm mb-8 animate-pulse font-medium">Menghubungkan ke Awan...</p>
+                        <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
+                            <div className="h-full bg-white loading-bar-transition shadow-lg" style={{ width: `${progress}%` }}></div>
+                        </div>
+                        <button onClick={onSkip} className="mt-8 text-xs font-bold text-green-200 hover:text-white underline hover:no-underline transition-colors opacity-80">
+                            Lambat? Tekan untuk Masuk Segera &gt;&gt;
+                        </button>
+                    </>
+                )}
             </div>
         );
 
@@ -577,11 +621,11 @@
             const [isLoggedIn, setIsLoggedIn] = useState(false);
             const [userRole, setUserRole] = useState(null); 
             const [currentUser, setCurrentUser] = useState(null);
-            const [currentTeacher, setCurrentTeacher] = useState(null); // Data guru yang sedang login
-            
+            const [currentTeacher, setCurrentTeacher] = useState(null); 
             const [isFirebaseReady, setIsFirebaseReady] = useState(false);
             const [loadingProgress, setLoadingProgress] = useState(0); 
             const [isLoadingSkipped, setIsLoadingSkipped] = useState(false); 
+            const [firebaseError, setFirebaseError] = useState(null); // Error state for loading screen
 
             const [teachers, setTeachers] = useState([]);
             const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
@@ -604,19 +648,22 @@
             useEffect(() => {
                 const progressTimer = setInterval(() => {
                     setLoadingProgress(prev => {
-                        // LAJUKAN LOADING: Tambah 5 setiap interval
-                        if (prev >= 95 && !isFirebaseReady) return 95;
+                        if (prev >= 90 && !isFirebaseReady) return 90;
                         if (isFirebaseReady) return 100;
                         return prev + 5; 
                     });
-                }, 20); 
+                }, 50); 
 
                 const checkFirebase = setInterval(() => {
                     if (window.firebaseOps && window.firebaseOps.auth) {
                         setIsFirebaseReady(true);
                         clearInterval(checkFirebase);
+                    } else if (window.firebaseInitError) {
+                        setFirebaseError(window.firebaseInitError);
+                        setIsFirebaseReady(false); // keep false to show error state in loading screen
+                        clearInterval(checkFirebase);
                     }
-                }, 50); 
+                }, 100); 
 
                 return () => {
                     clearInterval(progressTimer);
@@ -624,7 +671,7 @@
                 };
             }, [isFirebaseReady]);
 
-            // --- FIREBASE AUTH ---
+            // --- FIREBASE AUTH (AUTO START) ---
             useEffect(() => {
                 if (!isFirebaseReady) return;
                 
@@ -633,14 +680,17 @@
                 const { auth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } = window.firebaseOps;
                 
                 const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
+                    // Only try to sign in if not already signed in
+                    if (!auth.currentUser) {
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Auto Auth Error", error);
                         }
-                    } catch (error) {
-                        console.error("Auth Error", error);
                     }
                 };
                 initAuth();
@@ -687,13 +737,10 @@
             const handleAttendanceSubmit = async (teacherId, scanType, reason = '') => {
                 if (!teacherId) return;
 
-                // SAFEGUARD: FORCE CONNECT IF NOT READY
+                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                     const connected = await ensureAuthReady();
-                    if (!connected) {
-                        alert("Sistem belum bersedia. Sila periksa sambungan internet.");
-                        return;
-                    }
+                    if (!connected) return; // ensureAuthReady handles alerts
                 }
 
                 const now = new Date();
@@ -703,8 +750,7 @@
                 const teacherRef = doc(db, 'artifacts', appId, 'public', 'data', 'teachers', teacherId);
 
                 let updateData = {};
-                // Determine update based on scanType from camera or manual selection
-                const type = scanType || scanMode; // Use argument if provided (from camera), else state
+                const type = scanType || scanMode;
 
                 if (type === 'clock_in') updateData = { status: 'Hadir', timeIn: timeString, reason: '' };
                 else if (type === 'clock_out') updateData = { timeOut: timeString };
@@ -732,10 +778,9 @@
             const handleAddTeacher = async () => {
                 if (!newTeacherName.trim()) { alert("Sila masukkan nama guru."); return; }
                 
-                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                     const connected = await ensureAuthReady();
-                    if (!connected) { alert("Sistem belum bersedia."); return; }
+                    if (!connected) return;
                 }
 
                 const { db, collection, addDoc, appId } = window.firebaseOps;
@@ -757,7 +802,6 @@
             };
 
             const handleDeleteTeacher = async (id) => {
-                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                      const connected = await ensureAuthReady();
                      if (!connected) return;
@@ -774,7 +818,6 @@
             };
 
             const handleSaveSettings = async () => {
-                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                      const connected = await ensureAuthReady();
                      if (!connected) return;
@@ -794,7 +837,6 @@
 
             const handleResetDaily = async () => {
                 if(!confirm("Reset semua guru kepada 'Tidak Hadir'?")) return;
-                // FORCE AUTH CHECK
                 if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
                      const connected = await ensureAuthReady();
                      if (!connected) return;
@@ -833,13 +875,15 @@
 
             const handleSkipLoading = () => {
                 setIsLoadingSkipped(true);
+                // Allow UI to render even if firebase isn't ready
                 setIsFirebaseReady(true); 
-                // Try connecting in background
+                // Attempt connection in background
                 ensureAuthReady();
             };
 
+            // LOADING LOGIC
             if (!isLoadingSkipped && (loadingProgress < 100 || !isFirebaseReady)) {
-                return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} />;
+                return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} errorMsg={firebaseError} />;
             }
 
             if (!isLoggedIn) return (
