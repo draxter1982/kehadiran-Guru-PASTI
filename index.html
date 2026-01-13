@@ -22,23 +22,22 @@
     <!-- 5. PHOSPHOR ICONS -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
+    <!-- 6. HTML5-QRCODE (PENGIMBAS KAMERA SEBENAR) -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
     <style>
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        
         .loading-bar-transition { transition: width 0.1s linear; }
         
-        .camera-overlay { background: rgba(0,0,0,0.9); }
-        .scanner-line { 
-            width: 100%; 
-            height: 2px; 
-            background: #ef4444; 
-            position: absolute; 
-            top: 0; 
-            animation: scan 2s infinite linear; 
-            box-shadow: 0 0 4px #ef4444;
+        .camera-overlay { background: rgba(0,0,0,0.95); }
+        
+        /* Custom style untuk scanner library */
+        #reader { width: 100%; border: none !important; }
+        #reader__scan_region { background: white; }
+        #reader__dashboard_section_csr button { 
+            background-color: #2563eb; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: bold; margin-top: 10px; cursor: pointer;
         }
-        @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
 
         @media print {
             .no-print { display: none !important; }
@@ -48,44 +47,21 @@
         .print-only { display: none; }
     </style>
 
-    <!-- 6. FIREBASE SETUP (MODULE) & DEMO MODE FALLBACK -->
+    <!-- 7. FIREBASE SETUP -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // =================================================================================
-        // ARAHAN: UNTUK MENGHUBUNGKAN SEMUA PERANTI (ONLINE), ISI RUANGAN INI
-        // =================================================================================
-        // 1. Buka https://console.firebase.google.com/
-        // 2. Create Project > Register App (Web) > Copy config
-        // 3. Masukkan config anda di dalam 'manualConfig' di bawah.
-        
-        const manualConfig = {
-            // apiKey: "ISI_API_KEY_ANDA_DI_SINI",
-            // authDomain: "projek-anda.firebaseapp.com",
-            // projectId: "projek-anda",
-            // storageBucket: "projek-anda.appspot.com",
-            // messagingSenderId: "123456789",
-            // appId: "1:123456789:web:abcdef"
-        };
-
-        // =================================================================================
-
-        // --- SISTEM PEMILIHAN MOD (AUTO DETECT) ---
+        // --- SISTEM PEMILIHAN MOD ---
         let firebaseConfig = null;
-        
-        // 1. Semak jika pengguna telah masukkan manualConfig
-        if (manualConfig && manualConfig.apiKey) {
-            firebaseConfig = manualConfig;
-        } 
-        // 2. Jika tiada, cuba cari environment variable (untuk preview dalaman)
-        else if (typeof __firebase_config !== 'undefined') {
-             try { firebaseConfig = JSON.parse(__firebase_config); } catch(e) {}
-        }
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                firebaseConfig = JSON.parse(__firebase_config);
+            }
+        } catch (e) { console.warn("Tiada config, beralih ke mod demo."); }
 
         if (firebaseConfig) {
-            // --- MOD ONLINE (FIREBASE SEBENAR) ---
             try {
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
@@ -100,93 +76,56 @@
                 console.log("Firebase initialized successfully (Online)");
             } catch (error) {
                 console.error("Firebase init failed:", error);
-                initDemoMode(); // Fallback jika init gagal
+                window.firebaseInitError = error.message;
+                initDemoMode();
             }
         } else {
-            // --- MOD DEMO (OFFLINE / LOCALSTORAGE) ---
             initDemoMode();
         }
 
         function initDemoMode() {
             console.warn("Menggunakan Mod Demo (Simpanan Tempatan)");
-            
-            // Mock Data Handler
             const getLocal = (key) => JSON.parse(localStorage.getItem('demo_' + key) || '[]');
             const setLocal = (key, data) => localStorage.setItem('demo_' + key, JSON.stringify(data));
-            const listeners = {}; // { 'teachers': [cb1, cb2] }
-
+            const listeners = {}; 
             const notify = (key) => {
                 if (listeners[key]) {
                     const data = getLocal(key);
                     const snapshot = { docs: data.map(d => ({ id: d.id, data: () => d, exists: () => true })) };
-                    // Handle doc snapshot structure slightly differently
                     const docSnapshot = { exists: () => data.length > 0, data: () => data[0] || {} }; 
-                    
                     listeners[key].forEach(cb => {
-                        // Very basic distinction between collection and doc listener mock
                         if (key.includes('_config')) cb(docSnapshot);
                         else cb(snapshot);
                     });
                 }
             };
-
-            // Mock Auth User
             const mockUser = { uid: 'demo-user-123', isAnonymous: true };
-
             window.firebaseOps = {
-                mode: 'demo',
-                auth: { currentUser: mockUser },
-                appId: 'demo-app',
-                
+                mode: 'demo', auth: { currentUser: mockUser }, appId: 'demo-app',
                 signInAnonymously: async () => ({ user: mockUser }),
                 signInWithCustomToken: async () => ({ user: mockUser }),
                 onAuthStateChanged: (auth, cb) => { cb(mockUser); return () => {}; },
-                
                 collection: (db, ...path) => ({ type: 'col', key: path[path.length - 1] }),
                 doc: (db, ...path) => ({ type: 'doc', key: path[path.length - 1], id: path[path.length - 1] === 'config' ? 'config' : path[path.length - 1] }),
-                
                 onSnapshot: (ref, cb) => {
                     const key = ref.key === 'config' ? 'settings_config' : 'teachers';
                     if (!listeners[key]) listeners[key] = [];
-                    listeners[key].push(cb);
-                    notify(key); // Initial call
-                    return () => {};
+                    listeners[key].push(cb); notify(key); return () => {};
                 },
-                
                 addDoc: async (ref, data) => {
-                    const key = 'teachers';
-                    const list = getLocal(key);
-                    const newId = 'demo_' + Date.now();
-                    list.push({ id: newId, ...data });
-                    setLocal(key, list);
-                    notify(key);
-                    return { id: newId };
+                    const key = 'teachers'; const list = getLocal(key); const newId = 'demo_' + Date.now();
+                    list.push({ id: newId, ...data }); setLocal(key, list); notify(key); return { id: newId };
                 },
-                
                 updateDoc: async (ref, data) => {
-                    const key = 'teachers';
-                    const list = getLocal(key);
-                    const idx = list.findIndex(i => i.id === ref.id);
-                    if (idx !== -1) {
-                        list[idx] = { ...list[idx], ...data };
-                        setLocal(key, list);
-                        notify(key);
-                    }
+                    const key = 'teachers'; const list = getLocal(key); const idx = list.findIndex(i => i.id === ref.id);
+                    if (idx !== -1) { list[idx] = { ...list[idx], ...data }; setLocal(key, list); notify(key); }
                 },
-                
                 deleteDoc: async (ref) => {
-                    const key = 'teachers';
-                    let list = getLocal(key);
-                    list = list.filter(i => i.id !== ref.id);
-                    setLocal(key, list);
-                    notify(key);
+                    const key = 'teachers'; let list = getLocal(key); list = list.filter(i => i.id !== ref.id);
+                    setLocal(key, list); notify(key);
                 },
-
                 setDoc: async (ref, data) => {
-                    if (ref.key === 'config') {
-                        setLocal('settings_config', [data]); // Save as array for helper simplicity
-                        notify('settings_config');
-                    }
+                    if (ref.key === 'config') { setLocal('settings_config', [data]); notify('settings_config'); }
                 }
             };
         }
@@ -197,18 +136,15 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- SAFE RECHARTS ACCESS ---
         const RechartsObj = window.Recharts || {};
         const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } = RechartsObj;
         const isRechartsLoaded = !!window.Recharts;
 
-        // --- CONSTANTS ---
         const BRANCHES = ['PAH1', 'PAH2', 'PAH3', 'PAH5'];
         const MONTHS = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
 
-        // --- UTILS ---
         const seededRandom = (seed) => {
             let value = 0;
             for(let i=0; i<seed.length; i++) value += seed.charCodeAt(i);
@@ -216,54 +152,39 @@
             return x - Math.floor(x);
         };
 
-        // --- HELPER: ROBUST AUTH CHECK ---
         const ensureAuthReady = async () => {
-            // Tunggu modul (sama ada Firebase sebenar atau Mock)
             let attempts = 0;
-            while (!window.firebaseOps && attempts < 50) {
-                await new Promise(r => setTimeout(r, 100));
-                attempts++;
-            }
-
+            while (!window.firebaseOps && attempts < 50) { await new Promise(r => setTimeout(r, 100)); attempts++; }
             if (!window.firebaseOps) return false;
-
-            // Jika mod demo, sentiasa ready
             if (window.firebaseOps.mode === 'demo') return true;
-
             const { auth, signInAnonymously } = window.firebaseOps;
-            
             if (auth.currentUser) return true;
-
             try {
                 await signInAnonymously(auth);
                 let loginAttempts = 0;
-                while (!auth.currentUser && loginAttempts < 50) { 
-                    await new Promise(r => setTimeout(r, 100));
-                    loginAttempts++;
-                }
+                while (!auth.currentUser && loginAttempts < 50) { await new Promise(r => setTimeout(r, 100)); loginAttempts++; }
                 return !!auth.currentUser;
-            } catch (e) {
-                console.error("Auth failed", e);
-                return false;
-            }
+            } catch (e) { return false; }
         };
 
         // --- COMPONENT: LOADING SCREEN ---
         const LoadingScreen = ({ progress, onSkip, errorMsg, mode }) => (
             <div className="fixed inset-0 bg-green-700 flex flex-col items-center justify-center z-50 text-white">
-                 <div className="relative mb-8">
+                <div className="relative mb-8">
                     <div className="w-24 h-24 border-4 border-green-400 border-t-white rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center font-bold text-xl drop-shadow-md">
-                        {progress}%
-                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center font-bold text-xl drop-shadow-md">{progress}%</div>
                 </div>
                 <h1 className="text-3xl font-bold mb-2 tracking-wide drop-shadow-md">SISTEM PASTI</h1>
                 <p className="text-green-100 text-sm mb-2 animate-pulse font-medium">
-                    {mode === 'online' ? 'Menghubungkan ke Awan (Online)...' : 'Memulakan Mod Demo (Offline)...'}
+                    {errorMsg ? 'Ralat Sambungan' : (mode === 'online' ? 'Menghubungkan ke Awan (Online)...' : 'Memulakan Mod Demo (Offline)...')}
                 </p>
-                <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600">
+                {errorMsg && <p className="text-red-300 text-xs mb-4 bg-red-900/50 p-2 rounded">{errorMsg}</p>}
+                <div className="w-64 h-3 bg-green-900 rounded-full overflow-hidden shadow-inner border border-green-600 mb-6">
                     <div className="h-full bg-white loading-bar-transition shadow-lg" style={{ width: `${progress}%` }}></div>
                 </div>
+                <button onClick={onSkip} className="text-xs font-bold text-green-200 hover:text-white underline hover:no-underline transition-colors opacity-80">
+                    Langkau & Masuk Segera &gt;&gt;
+                </button>
             </div>
         );
 
@@ -271,11 +192,7 @@
         const Header = ({ userRole, view, setView, isAdmin, onLogout, schoolName, logoUrl, isOnline, currentTeacher, isDemo }) => (
             <div className="bg-green-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 no-print">
                 <div className="flex items-center gap-3">
-                    {logoUrl ? (
-                        <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded-full bg-white p-1" />
-                    ) : (
-                        <i className="ph ph-user-check text-3xl"></i>
-                    )}
+                    {logoUrl ? <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded-full bg-white p-1" /> : <i className="ph ph-user-check text-3xl"></i>}
                     <div>
                         <h1 className="text-xl font-bold leading-none uppercase">{schoolName || 'PASTI'}</h1>
                         <div className="flex flex-col text-xs text-green-100 opacity-90 mt-1">
@@ -289,22 +206,14 @@
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => setView('dashboard')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'dashboard' ? 'bg-white text-green-700' : 'bg-green-700'}`}>Utama</button>
-                    {userRole === 'guru' && (
-                        <button onClick={() => setView('scan')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'scan' ? 'bg-white text-green-700' : 'bg-green-700 border border-green-400'}`}>
-                            <i className="ph ph-qr-code"></i> Imbas
-                        </button>
-                    )}
+                    {userRole === 'guru' && <button onClick={() => setView('scan')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'scan' ? 'bg-white text-green-700' : 'bg-green-700 border border-green-400'}`}><i className="ph ph-qr-code"></i> Imbas</button>}
                     {isAdmin && (
                         <>
                             <button onClick={() => setView('scan')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'scan' ? 'bg-white text-green-700' : 'bg-green-700'}`}>Scan (Kiosk)</button>
-                            <button onClick={() => setView('admin')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'admin' ? 'bg-white text-green-700' : 'bg-green-700 border border-green-400'}`}>
-                                <i className="ph ph-gear-six"></i> Admin
-                            </button>
+                            <button onClick={() => setView('admin')} className={`px-3 py-1 rounded text-sm font-bold ${view === 'admin' ? 'bg-white text-green-700' : 'bg-green-700 border border-green-400'}`}><i className="ph ph-gear-six"></i> Admin</button>
                         </>
                     )}
-                    <button onClick={onLogout} className="ml-2 px-3 py-1 rounded text-sm font-bold bg-red-600 hover:bg-red-700 flex items-center gap-1">
-                        <i className="ph ph-sign-out"></i>
-                    </button>
+                    <button onClick={onLogout} className="ml-2 px-3 py-1 rounded text-sm font-bold bg-red-600 hover:bg-red-700 flex items-center gap-1"><i className="ph ph-sign-out"></i></button>
                 </div>
             </div>
         );
@@ -495,12 +404,75 @@
         const ScanView = ({ currentTeacher, teachers, userRole, handleAttendanceSubmit, handlePrint, isPrinting, schoolName }) => {
             const [isCameraOpen, setIsCameraOpen] = useState(false);
             const [notification, setNotification] = useState('');
-            const [kioskScanMode, setKioskScanMode] = useState(null);
-            const [kioskTeacherId, setKioskTeacherId] = useState('');
+            const [showReasonInput, setShowReasonInput] = useState(false);
+            const [tempScanType, setTempScanType] = useState(null);
             const [leaveReason, setLeaveReason] = useState('');
+            const [kioskTeacherId, setKioskTeacherId] = useState('');
+
+            // --- FUNGSI KAMERA SEBENAR ---
+            useEffect(() => {
+                let html5QrcodeScanner;
+                if (isCameraOpen && userRole === 'guru') {
+                    setTimeout(() => {
+                         if(document.getElementById('reader')) {
+                             html5QrcodeScanner = new Html5QrcodeScanner(
+                                "reader",
+                                { fps: 10, qrbox: { width: 250, height: 250 } },
+                                false
+                            );
+                            html5QrcodeScanner.render(
+                                (decodedText) => {
+                                    handleRealScan(decodedText); // Scan berjaya
+                                    html5QrcodeScanner.clear();
+                                    setIsCameraOpen(false);
+                                },
+                                (errorMessage) => {}
+                            );
+                         }
+                    }, 100);
+                }
+                
+                return () => {
+                    if(html5QrcodeScanner) {
+                        html5QrcodeScanner.clear().catch(error => console.error("Failed to clear scanner. ", error));
+                    }
+                };
+            }, [isCameraOpen, userRole]);
+
+            const handleRealScan = (text) => {
+                if (!currentTeacher) return;
+                
+                if (text === 'PASTI_CLOCK_IN') {
+                    handleAttendanceSubmit(currentTeacher.id, 'clock_in');
+                    setNotification("Hadir: Masuk Berjaya!");
+                    setTimeout(() => setNotification(''), 3000);
+                } else if (text === 'PASTI_CLOCK_OUT') {
+                    handleAttendanceSubmit(currentTeacher.id, 'clock_out');
+                    setNotification("Hadir: Balik Berjaya!");
+                    setTimeout(() => setNotification(''), 3000);
+                } else if (text === 'PASTI_OUTSTATION') {
+                    setTempScanType('outstation');
+                    setShowReasonInput(true); // Buka input form
+                } else if (text === 'PASTI_LEAVE') {
+                    setTempScanType('leave');
+                    setShowReasonInput(true); // Buka input form
+                } else {
+                    alert("Kod QR tidak dikenali: " + text);
+                }
+            };
 
             const handleCameraScan = (type) => {
-                setIsCameraOpen(false);
+                // FUNGSI UNTUK SIMULASI AGAR SAMA DENGAN REAL SCAN
+                setIsCameraOpen(false); // Tutup kamera
+                
+                // Jika Cuti/Tugas Luar, minta input dulu
+                if (type === 'outstation' || type === 'leave') {
+                    setTempScanType(type);
+                    setShowReasonInput(true);
+                    return;
+                }
+
+                // Jika Masuk/Balik, terus submit
                 const teacherId = currentTeacher ? currentTeacher.id : kioskTeacherId;
                 if (teacherId) {
                     handleAttendanceSubmit(teacherId, type, leaveReason);
@@ -508,8 +480,45 @@
                     setTimeout(() => setNotification(''), 3000);
                 }
             };
+            
+            const submitReason = () => {
+                if (tempScanType && currentTeacher) {
+                    handleAttendanceSubmit(currentTeacher.id, tempScanType, leaveReason);
+                    setNotification("Data direkodkan!");
+                    setShowReasonInput(false);
+                    setLeaveReason('');
+                    setTempScanType(null);
+                    setTimeout(() => setNotification(''), 3000);
+                }
+            };
 
             if (userRole === 'guru' && currentTeacher) {
+                // PAPARAN INPUT BORANG (SELEPAS SCAN CUTI/LUAR)
+                if (showReasonInput) {
+                     return (
+                        <div className="p-4 md:p-8 max-w-xl mx-auto">
+                            <div className="bg-white rounded-xl shadow-xl p-8 space-y-6">
+                                <div className="text-center">
+                                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mx-auto mb-4"><i className="ph ph-note-pencil text-3xl"></i></div>
+                                    <h3 className="font-bold text-xl text-gray-800">Nyatakan Sebab / Lokasi</h3>
+                                    <p className="text-gray-500 text-sm">Sila isi maklumat lanjut untuk rekod ini.</p>
+                                </div>
+                                <textarea 
+                                    className="w-full p-4 border-2 border-blue-100 rounded-lg h-32 focus:border-blue-500 outline-none" 
+                                    placeholder={tempScanType === 'leave' ? "Contoh: Demam, Urusan Keluarga..." : "Contoh: Mesyuarat di PPD, Kursus..."}
+                                    value={leaveReason}
+                                    onChange={(e) => setLeaveReason(e.target.value)}
+                                    autoFocus
+                                ></textarea>
+                                <div className="flex gap-3">
+                                    <button onClick={() => { setShowReasonInput(false); setLeaveReason(''); }} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200">Batal</button>
+                                    <button onClick={submitReason} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-md">Hantar Laporan</button>
+                                </div>
+                            </div>
+                        </div>
+                     );
+                }
+
                 return (
                     <div className="p-4 md:p-8 max-w-xl mx-auto">
                         <div className="bg-white rounded-xl shadow-xl p-8 text-center space-y-6">
@@ -519,53 +528,59 @@
                                 <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold mt-2">{currentTeacher.branch}</span>
                             </div>
                             <hr />
-                            <div className="space-y-4">
-                                <p className="text-gray-600">Sila tekan butang di bawah untuk membuka kamera dan mengimbas kod QR di dinding sekolah.</p>
-                                <button onClick={() => setIsCameraOpen(true)} className="w-full py-5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl shadow-lg flex items-center justify-center gap-3 transition-transform active:scale-95">
-                                    <i className="ph ph-camera text-3xl"></i>BUKA KAMERA
-                                </button>
-                            </div>
+                            
+                            {!isCameraOpen && (
+                                <div className="space-y-4">
+                                    <p className="text-gray-600">Sila tekan butang di bawah untuk membuka kamera dan mengimbas kod QR di dinding sekolah.</p>
+                                    <button onClick={() => setIsCameraOpen(true)} className="w-full py-5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl shadow-lg flex items-center justify-center gap-3 transition-transform active:scale-95">
+                                        <i className="ph ph-camera text-3xl"></i>BUKA KAMERA
+                                    </button>
+                                </div>
+                            )}
+
+                            {isCameraOpen && (
+                                <div className="fixed inset-0 camera-overlay z-50 flex flex-col items-center justify-center p-4">
+                                    <div className="relative w-full max-w-md bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-700">
+                                        <div className="bg-gray-900 p-4 flex justify-between items-center text-white">
+                                            <h3 className="font-bold flex items-center gap-2"><i className="ph ph-camera"></i> Imbas QR</h3>
+                                            <button onClick={() => setIsCameraOpen(false)} className="text-gray-400 hover:text-white"><i className="ph ph-x text-2xl"></i></button>
+                                        </div>
+                                        
+                                        {/* REAL CAMERA REGION */}
+                                        <div id="reader" className="bg-white"></div>
+
+                                        <div className="bg-gray-900 p-6 space-y-3">
+                                            <p className="text-gray-400 text-xs text-center mb-2 uppercase tracking-widest">Simulasi: Pilih Kod QR Dinding</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button onClick={() => handleCameraScan('clock_in')} className="bg-blue-600 hover:bg-blue-500 text-white py-3 rounded font-bold text-sm">QR MASUK</button>
+                                                <button onClick={() => handleCameraScan('clock_out')} className="bg-rose-600 hover:bg-rose-500 text-white py-3 rounded font-bold text-sm">QR BALIK</button>
+                                                <button onClick={() => handleCameraScan('outstation')} className="bg-purple-600 hover:bg-purple-500 text-white py-3 rounded font-bold text-sm">TUGAS LUAR</button>
+                                                <button onClick={() => handleCameraScan('leave')} className="bg-orange-600 hover:bg-orange-500 text-white py-3 rounded font-bold text-sm">CUTI / MC</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {notification && (
                                 <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-fade-in z-50">
                                     <i className="ph ph-check-circle text-green-400 text-xl"></i><span className="font-semibold">{notification}</span>
                                 </div>
                             )}
                         </div>
-                        {isCameraOpen && (
-                            <div className="fixed inset-0 camera-overlay z-50 flex flex-col items-center justify-center p-4">
-                                <div className="relative w-full max-w-md bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-700">
-                                    <div className="bg-gray-900 p-4 flex justify-between items-center text-white">
-                                        <h3 className="font-bold flex items-center gap-2"><i className="ph ph-camera"></i> Imbas QR</h3>
-                                        <button onClick={() => setIsCameraOpen(false)} className="text-gray-400 hover:text-white"><i className="ph ph-x text-2xl"></i></button>
-                                    </div>
-                                    <div className="relative h-80 bg-gray-800 flex items-center justify-center">
-                                        <div className="w-64 h-64 border-4 border-green-500 rounded-lg relative"><div className="scanner-line"></div><p className="absolute -bottom-8 left-0 right-0 text-center text-white text-xs shadow-black drop-shadow-md">Halakan kamera pada Kod QR</p></div>
-                                    </div>
-                                    <div className="bg-gray-900 p-6 space-y-3">
-                                        <p className="text-gray-400 text-xs text-center mb-2 uppercase tracking-widest">Simulasi: Pilih Kod QR Dinding</p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button onClick={() => handleCameraScan('clock_in')} className="bg-blue-600 hover:bg-blue-500 text-white py-3 rounded font-bold text-sm">QR MASUK</button>
-                                            <button onClick={() => handleCameraScan('clock_out')} className="bg-rose-600 hover:bg-rose-500 text-white py-3 rounded font-bold text-sm">QR BALIK</button>
-                                            <button onClick={() => handleCameraScan('outstation')} className="bg-purple-600 hover:bg-purple-500 text-white py-3 rounded font-bold text-sm">TUGAS LUAR</button>
-                                            <button onClick={() => handleCameraScan('leave')} className="bg-orange-600 hover:bg-orange-500 text-white py-3 rounded font-bold text-sm">CUTI / MC</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 );
             }
 
-            // Jika Admin (Kiosk Mode)
+            // Jika Admin (Kiosk Mode / Print)
             return (
                 <div className="p-4 md:p-8 max-w-6xl mx-auto">
                     <div className={`bg-white rounded-xl shadow-lg p-6 md:p-10 text-center space-y-8 no-print ${isPrinting ? 'hidden' : ''}`}>
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-6">
-                            <div className="text-left"><h2 className="text-3xl font-bold text-gray-800">Mod Kiosk / Cetak</h2><p className="text-gray-500">Admin boleh cetak QR di sini.</p></div>
+                            <div className="text-left"><h2 className="text-3xl font-bold text-gray-800">Cetak Kod QR</h2><p className="text-gray-500">Cetak kod ini dan tampal di dinding sekolah.</p></div>
                             <button onClick={handlePrint} className="flex items-center gap-2 bg-gray-800 text-white px-5 py-3 rounded-lg shadow hover:bg-gray-900 transition-all"><i className="ph ph-printer text-xl"></i> Cetak QR</button>
                         </div>
-                        <div className="text-gray-400 italic py-10">Sila gunakan butang "Cetak QR" di atas untuk mencetak kod QR dinding.</div>
+                        <div className="text-gray-400 italic py-10">Sila gunakan butang "Cetak QR" di atas.</div>
                     </div>
                     <div className={`print-only ${isPrinting ? 'block' : 'hidden'} bg-white p-8 w-full`}>
                         <div className="text-center mb-8 border-b-2 border-gray-800 pb-4"><h1 className="text-4xl font-bold text-gray-900">KOD QR KEHADIRAN {schoolName}</h1><p className="text-xl text-gray-600">Sila Imbas Menggunakan Aplikasi</p></div>
@@ -692,6 +707,7 @@
             const [loadingProgress, setLoadingProgress] = useState(0); 
             const [isLoadingSkipped, setIsLoadingSkipped] = useState(false); 
             const [isDemoMode, setIsDemoMode] = useState(false);
+            const [firebaseError, setFirebaseError] = useState(null);
 
             const [teachers, setTeachers] = useState([]);
             const [schoolName, setSchoolName] = useState('PASTI AL-HUDA');
@@ -722,10 +738,9 @@
 
                 const checkFirebase = setInterval(() => {
                     if (window.firebaseOps) {
-                         // Check mode (online/demo)
                          if (window.firebaseOps.mode === 'demo') setIsDemoMode(true);
-                         
-                         // If demo mode, instant ready. If online, wait for auth module.
+                         if (window.firebaseInitError) setFirebaseError(window.firebaseInitError);
+
                          if (window.firebaseOps.mode === 'demo' || window.firebaseOps.auth) {
                             setIsFirebaseReady(true);
                             clearInterval(checkFirebase);
@@ -747,7 +762,6 @@
                 const { auth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } = window.firebaseOps;
                 
                 const initAuth = async () => {
-                    // Only try to sign in if not already signed in
                     if (!auth.currentUser) {
                         try {
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -776,14 +790,12 @@
 
                 const { db, collection, doc, onSnapshot, appId } = window.firebaseOps;
 
-                // Sync Teachers
                 const teachersRef = collection(db, 'artifacts', appId, 'public', 'data', 'teachers');
                 const unsubscribeTeachers = onSnapshot(teachersRef, (snapshot) => {
                     const teachersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setTeachers(teachersData);
                 }, (error) => console.error("Sync error teachers:", error));
 
-                // Sync Settings
                 const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
                 const unsubscribeSettings = onSnapshot(settingsRef, (doc) => {
                     if (doc.exists()) {
@@ -804,6 +816,14 @@
             const handleAttendanceSubmit = async (teacherId, scanType, reason = '') => {
                 if (!teacherId) return;
 
+                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
+                    const connected = await ensureAuthReady();
+                    if (!connected) {
+                        alert("Sistem belum bersedia. Sila periksa sambungan internet.");
+                        return;
+                    }
+                }
+
                 const now = new Date();
                 const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                 
@@ -820,13 +840,7 @@
 
                 try {
                     await updateDoc(teacherRef, updateData);
-                    setScanMessage(`Berjaya direkodkan pada ${timeString}`);
-                    setTimeout(() => {
-                        setScanMessage('');
-                        setLeaveReason('');
-                        setSelectedTeacherId('');
-                        if (scanMode) setView('dashboard');
-                    }, 2000);
+                    // Mesej kejayaan dipaparkan di komponen pemanggil (ScanView)
                 } catch (e) {
                     alert("Ralat menyimpan data: " + e.message);
                 }
@@ -840,6 +854,11 @@
             const handleAddTeacher = async () => {
                 if (!newTeacherName.trim()) { alert("Sila masukkan nama guru."); return; }
                 
+                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
+                    const connected = await ensureAuthReady();
+                    if (!connected) { alert("Sistem belum bersedia."); return; }
+                }
+
                 const { db, collection, addDoc, appId } = window.firebaseOps;
                 
                 try {
@@ -859,7 +878,12 @@
             };
 
             const handleDeleteTeacher = async (id) => {
-                if (confirm("Adakah anda pasti? Data akan dipadam.")) {
+                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
+                     const connected = await ensureAuthReady();
+                     if (!connected) return;
+                }
+
+                if (confirm("Adakah anda pasti? Data akan dipadam dari semua peranti.")) {
                     const { db, doc, deleteDoc, appId } = window.firebaseOps;
                     try {
                         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teachers', id));
@@ -870,6 +894,11 @@
             };
 
             const handleSaveSettings = async () => {
+                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
+                     const connected = await ensureAuthReady();
+                     if (!connected) return;
+                }
+
                 const { db, doc, setDoc, appId } = window.firebaseOps;
                 try {
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), {
@@ -884,6 +913,10 @@
 
             const handleResetDaily = async () => {
                 if(!confirm("Reset semua guru kepada 'Tidak Hadir'?")) return;
+                if (!window.firebaseOps || !window.firebaseOps.auth.currentUser) {
+                     const connected = await ensureAuthReady();
+                     if (!connected) return;
+                }
                 
                 const { db, doc, updateDoc, appId } = window.firebaseOps;
                 
@@ -919,10 +952,11 @@
             const handleSkipLoading = () => {
                 setIsLoadingSkipped(true);
                 setIsFirebaseReady(true); 
+                ensureAuthReady();
             };
 
             if (!isLoadingSkipped && (loadingProgress < 100 || !isFirebaseReady)) {
-                return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} mode={isDemoMode ? 'demo' : 'online'} />;
+                return <LoadingScreen progress={loadingProgress} onSkip={handleSkipLoading} errorMsg={firebaseError} mode={isDemoMode ? 'demo' : 'online'} />;
             }
 
             if (!isLoggedIn) return (
