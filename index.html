@@ -183,7 +183,7 @@
 
         // --- HELPER: FORMAT MASA (12 JAM) ---
         const formatTime12 = (time24) => {
-            if (!time24 || time24 === '--:--') return '--:--';
+            if (!time24 || time24 === '--:--' || time24 === '-') return '--:--';
             try {
                 const [hours, minutes] = time24.split(':').map(Number);
                 if (isNaN(hours) || isNaN(minutes)) return time24;
@@ -695,13 +695,11 @@
                             } 
                             // Jika hari lepas, guna simulasi
                             else if (i < currentDay) {
-                                const seed = teacher.name + i + month;
-                                const statusRandom = seededRandom(seed);
-                                status = 'Hadir';
-                                timeIn = `07:${Math.floor(seededRandom(seed + 'in') * 59).toString().padStart(2, '0')}`;
-                                timeOut = `13:${Math.floor(seededRandom(seed + 'out') * 30).toString().padStart(2, '0')}`;
-                                if (statusRandom > 0.9) { status = 'Cuti'; timeIn = '--:--'; timeOut = '--:--'; }
-                                else if (statusRandom > 0.95) { status = 'Tidak Hadir'; timeIn = '--:--'; timeOut = '--:--'; }
+                                // BUANG SIMULASI - BIARKAN KOSONG JIKA TIADA DATA
+                                // Ini membetulkan isu "masa telah dimasukkan semua padahal data belum masuk lagi"
+                                status = '-';
+                                timeIn = '-';
+                                timeOut = '-';
                             }
                             // Hari masa depan kekal '-'
 
