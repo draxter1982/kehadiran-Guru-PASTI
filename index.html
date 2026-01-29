@@ -474,10 +474,15 @@
             
             // Ref untuk pengimbas kamera
             const scannerRef = useRef(null);
+            // Ref untuk elak trigger berulang & tambah delay
+            const isProcessingRef = useRef(false);
 
             // --- FUNGSI KAMERA SEBENAR (Html5Qrcode) ---
             useEffect(() => {
                 if (isCameraOpen && userRole === 'guru') {
+                    // Reset lock setiap kali kamera dibuka
+                    isProcessingRef.current = false;
+
                     // Gunakan sedikit delay untuk pastikan DOM 'reader' wujud
                     const timer = setTimeout(() => {
                          if(document.getElementById('reader')) {
@@ -485,7 +490,8 @@
                              const html5QrCode = new Html5Qrcode("reader");
                              scannerRef.current = html5QrCode;
 
-                             const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+                             // PEMBETULAN: Turunkan FPS ke 2 (Sangat perlahan untuk elak terlalu sensitif)
+                             const config = { fps: 2, qrbox: { width: 250, height: 250 } };
                              
                              // Mula kamera belakang (environment)
                              html5QrCode.start(
@@ -535,6 +541,7 @@
             };
 
             const handleRealScan = (text) => {
+                if (isProcessingRef.current) return; // Jangan proses jika sedang proses
                 if (!currentTeacher) return;
                 
                 // Peta kod QR kepada tindakan
@@ -545,18 +552,31 @@
                 else if (text === 'PASTI_LEAVE') type = 'leave';
                 
                 if (type) {
-                    // Hentikan kamera sementara
-                    stopCamera();
+                    isProcessingRef.current = true; // Lock
                     
-                    if (type === 'outstation' || type === 'leave') {
-                        setTempScanType(type);
-                        setShowReasonInput(true);
-                    } else {
-                        handleAttendanceSubmit(currentTeacher.id, type);
-                        setNotification(type === 'clock_in' ? "Masuk Berjaya!" : "Balik Berjaya!");
-                        setTimeout(() => setNotification(''), 3000);
-                    }
+                    // Tunjuk feedback serta merta
+                    setNotification("Kod Dikesan... Memproses...");
+
+                    // PEMBETULAN: Tambah Delay 1.5 saat sebelum proses data
+                    setTimeout(() => {
+                        stopCamera();
+                        
+                        if (type === 'outstation' || type === 'leave') {
+                            setTempScanType(type);
+                            setShowReasonInput(true);
+                            setNotification(""); // Clear notification bila masuk form
+                            isProcessingRef.current = false; // Reset lock sebab UI bertukar ke form
+                        } else {
+                            handleAttendanceSubmit(currentTeacher.id, type);
+                            setNotification(type === 'clock_in' ? "Masuk Berjaya!" : "Balik Berjaya!");
+                            setTimeout(() => {
+                                setNotification('');
+                                isProcessingRef.current = false; // Reset lock selepas notifikasi hilang
+                            }, 3000);
+                        }
+                    }, 1500); // Tunggu 1.5 saat
                 } else {
+                    // Jika QR salah, jangan lock lama-lama, alert terus
                     alert("Kod QR tidak sah: " + text);
                 }
             };
@@ -689,32 +709,36 @@
             const [isPrintingReport, setIsPrintingReport] = useState(false);
 
             const generateReportData = (month, branchFilter, teacherFilter, teachersList) => {
-                const daysInMonth = 20; let reportData = [];
-                const currentDay = new Date().getDate(); 
+                const monthIndex = MONTHS.indexOf(month);
+                const year = 2026;
+                // KIRAAN DINAMIK HARI DALAM BULAN
+                const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+                let reportData = [];
                 
+                // Dapatkan tarikh sebenar hari ini
+                const today = new Date();
+                const realDay = today.getDate();
+                const realMonth = today.getMonth(); // 0 = Januari
+
                 if(teachersList) {
                     teachersList.forEach(teacher => {
                         if (branchFilter !== 'Semua' && teacher.branch !== branchFilter) return;
                         if (teacherFilter !== 'Semua' && teacher.name !== teacherFilter) return;
                         
-                        // PEMBETULAN 3: Loop hanya sehingga hari ini atau 20 (mana lebih rendah)
                         for (let i = 1; i <= daysInMonth; i++) {
                             let status = '-', timeIn = '-', timeOut = '-';
                             
-                            // Jika hari ini, guna data sebenar
-                            if (i === currentDay) {
+                            // Papar data hanya jika tarikh gelung adalah HARI INI dan BULAN INI
+                            // (Logik ini digunakan kerana tiada database sejarah dalam versi fail tunggal ini)
+                            if (i === realDay && monthIndex === realMonth) {
                                 status = teacher.status;
                                 timeIn = teacher.timeIn;
                                 timeOut = teacher.timeOut;
-                            } 
-                            // Jika hari lepas, guna simulasi (DISINI KITA BUANG SIMULASI - JADI KOSONG)
-                            else if (i < currentDay) {
-                                status = '-';
-                                timeIn = '-';
-                                timeOut = '-';
                             }
+                            
+                            // Jika bukan hari ini, data kekal '-'
 
-                            reportData.push({ date: `${i} ${month} 2026`, name: teacher.name, branch: teacher.branch, status: status, timeIn: timeIn, timeOut: timeOut });
+                            reportData.push({ date: `${i} ${month} ${year}`, name: teacher.name, branch: teacher.branch, status: status, timeIn: timeIn, timeOut: timeOut });
                         }
                     });
                 }
